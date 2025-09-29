@@ -8,6 +8,7 @@
     tools:context=".MainActivity"
     android:padding="12dp">
 
+    <!-- Device selection spinner -->
     <Spinner
         android:id="@+id/spinnerDevices"
         android:layout_width="0dp"
@@ -16,43 +17,42 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <Button
-        android:id="@+id/btnConnect"
+    <!-- Top button row for Connect, Pick Image, Send -->
+    <LinearLayout
+        android:id="@+id/topButtonsRow"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="Connect"
+        android:orientation="horizontal"
         app:layout_constraintTop_toBottomOf="@id/spinnerDevices"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnSelectImage"
-        app:layout_constraintHorizontal_weight="1"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="4dp" />
-
-    <Button
-        android:id="@+id/btnSelectImage"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Pick Image"
-        app:layout_constraintTop_toBottomOf="@id/spinnerDevices"
-        app:layout_constraintStart_toEndOf="@id/btnConnect"
-        app:layout_constraintEnd_toStartOf="@id/btnPrint"
-        app:layout_constraintHorizontal_weight="1"
-        android:layout_marginTop="8dp"
-        android:layout_marginStart="4dp"
-        android:layout_marginEnd="4dp" />
-
-    <Button
-        android:id="@+id/btnPrint"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="Send"
-        app:layout_constraintTop_toBottomOf="@id/spinnerDevices"
-        app:layout_constraintStart_toEndOf="@id/btnSelectImage"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_weight="1"
-        android:layout_marginTop="8dp"
-        android:layout_marginStart="4dp" />
+        android:layout_marginTop="8dp">
 
+        <Button
+            android:id="@+id/btnConnect"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Connect" />
+
+        <Button
+            android:id="@+id/btnSelectImage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Pick Image" />
+
+        <Button
+            android:id="@+id/btnPrint"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="Send" />
+    </LinearLayout>
+
+    <!-- Image preview area -->
     <ImageView
         android:id="@+id/imagePreview"
         android:layout_width="0dp"
@@ -60,13 +60,138 @@
         android:scaleType="centerInside"
         android:adjustViewBounds="true"
         android:background="#222"
-        app:layout_constraintTop_toBottomOf="@id/btnConnect"
-        app:layout_constraintBottom_toTopOf="@id/txtStatus"
+        app:layout_constraintTop_toBottomOf="@id/topButtonsRow"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/controlsScroll"
         android:layout_marginTop="12dp"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="8dp" />
 
+    <!-- Scrollable control settings -->
+    <ScrollView
+        android:id="@+id/controlsScroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:fillViewport="false"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/txtStatus">
+
+        <LinearLayout
+            android:id="@+id/controlsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Image Adjustments"/>
+
+            <!-- Gamma Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+                <TextView
+                    android:id="@+id/labelGamma"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Gamma:"/>
+                <SeekBar
+                    android:id="@+id/seekGamma"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:max="150" />
+                <TextView
+                    android:id="@+id/valueGamma"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="1.00"/>
+            </LinearLayout>
+
+            <!-- Threshold Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+                <TextView
+                    android:id="@+id/labelThreshold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Threshold:"/>
+                <SeekBar
+                    android:id="@+id/seekThreshold"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:max="255" />
+                <TextView
+                    android:id="@+id/valueThreshold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="128"/>
+            </LinearLayout>
+
+            <!-- Dither Mode Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Dither:"/>
+                <Spinner
+                    android:id="@+id/spinnerDitherMode"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <!-- Invert Switch -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Invert"/>
+                <Switch
+                    android:id="@+id/switchInvert"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp" />
+            </LinearLayout>
+
+            <!-- Reset button full width -->
+            <Button
+                android:id="@+id/btnReset"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="Reset" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Status text view -->
     <TextView
         android:id="@+id/txtStatus"
         android:layout_width="0dp"
@@ -75,6 +200,7 @@
         android:textAppearance="@android:style/TextAppearance.Small"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="4dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
