@@ -55,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap currentBitmap;
 
     private static final int PRINTER_MAX_WIDTH_PX = 384; // Typical 58mm thermal printer width
+    private static final String TARGET_DEVICE_NAME = "T02"; // Filter target
 
     // Single-launcher for multiple permissions (we centralize)
     private ActivityResultLauncher<String[]> permissionsLauncher;
@@ -176,18 +177,23 @@ public class MainActivity extends AppCompatActivity {
         List<String> names = new ArrayList<>();
         deviceMap.clear();
         for (BluetoothDevice d : bonded) {
-            String deviceName = d.getName() == null ? "(unnamed)" : d.getName();
-            String label = deviceName + " (" + d.getAddress() + ")";
-            names.add(label);
-            deviceMap.put(label, d);
+            String rawName = d.getName();
+            if (rawName != null && rawName.equalsIgnoreCase(TARGET_DEVICE_NAME)) {
+                String label = rawName + " (" + d.getAddress() + ")";
+                names.add(label);
+                deviceMap.put(label, d);
+            }
         }
         if (names.isEmpty()) {
-            names.add("No paired devices");
+            names.add("No paired " + TARGET_DEVICE_NAME + " devices");
+            btnConnect.setEnabled(false);
+        } else {
+            btnConnect.setEnabled(true);
         }
         ArrayAdapter<String> adapterSpinner = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
         adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerDevices.setAdapter(adapterSpinner);
-        updateStatus("Loaded " + deviceMap.size() + " devices");
+        updateStatus("Found " + deviceMap.size() + " " + TARGET_DEVICE_NAME + " device(s)");
     }
 
     private void connectToSelectedDevice() {
