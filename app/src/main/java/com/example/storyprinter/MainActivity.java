@@ -30,7 +30,6 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -102,7 +101,6 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int DEFAULT_GAMMA_PROGRESS = 100; // => 1.00
     private static final int DEFAULT_THRESHOLD = 128;
-    private static final int DEFAULT_DITHER_MODE = DITHER_FLOYD_STEINBERG;
     private static final boolean DEFAULT_INVERT = false;
 
     // Live reprocess debounce
