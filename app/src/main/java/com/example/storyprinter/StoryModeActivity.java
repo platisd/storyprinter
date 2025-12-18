@@ -49,6 +49,9 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private int pageIndex = 0;
 
+    // Responses API conversation chaining.
+    private String previousResponseId = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -78,6 +81,7 @@ public class StoryModeActivity extends AppCompatActivity {
             pageIndex = savedInstanceState.getInt("pageIndex", 0);
             boolean started = savedInstanceState.getBoolean("started", false);
             btnNext.setEnabled(started);
+            previousResponseId = savedInstanceState.getString("previousResponseId", null);
         }
     }
 
@@ -88,6 +92,7 @@ public class StoryModeActivity extends AppCompatActivity {
         outState.putString("output", tvOutput.getText() != null ? tvOutput.getText().toString() : "");
         outState.putInt("pageIndex", pageIndex);
         outState.putBoolean("started", btnNext.isEnabled());
+        outState.putString("previousResponseId", previousResponseId);
     }
 
     @Override
@@ -105,6 +110,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
         conversation.clear();
         pageIndex = 0;
+        previousResponseId = null;
 
         // System instruction: generate ONLY an image description per page.
         conversation.add(new ChatMessage(
@@ -141,9 +147,25 @@ public class StoryModeActivity extends AppCompatActivity {
 
         io.execute(() -> {
             try {
-                String assistant = openAi.createChatCompletion(MODEL, TEMPERATURE, conversation);
+                // Turn the current conversation into a single prompt. The server will keep state
+                // via previous_response_id chaining.
+                String input = buildInputTranscript(conversation);
 
-                // Save assistant to conversation so the next prompt includes it.
+                OpenAiClient.ResponseResult result = openAi.createResponse(
+                        MODEL,
+                        TEMPERATURE,
+                        input,
+                        previousResponseId
+                );
+
+                // Update the chain id for the next turn.
+                if (result.responseId != null && !result.responseId.trim().isEmpty()) {
+                    previousResponseId = result.responseId;
+                }
+
+                String assistant = result.outputText;
+
+                // Save assistant to conversation so our local transcript stays coherent too.
                 conversation.add(new ChatMessage("assistant", assistant));
 
                 main.post(() -> {
@@ -166,12 +188,20 @@ public class StoryModeActivity extends AppCompatActivity {
                     tvOutput.setText((tvOutput.getText() != null ? tvOutput.getText().toString() : "") +
                             "\n\n[Error]\n" + msg);
                     btnStart.setEnabled(true);
-                    // Only enable Next if we already got at least 1 page before.
                     btnNext.setEnabled(pageIndex > 0);
                     setLoading(false);
                 });
             }
         });
+    }
+
+    private static String buildInputTranscript(List<ChatMessage> msgs) {
+        StringBuilder sb = new StringBuilder();
+        for (ChatMessage m : msgs) {
+            // Keep it simple and readable for the model.
+            sb.append(m.role).append(": ").append(m.content).append("\n");
+        }
+        return sb.toString();
     }
 
     private void setLoading(boolean loading) {
