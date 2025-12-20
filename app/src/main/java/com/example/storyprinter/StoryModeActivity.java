@@ -1,12 +1,18 @@
 package com.example.storyprinter;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Base64;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -34,23 +40,29 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private static final String MODEL = "gpt-4.1-mini";
     private static final double TEMPERATURE = 1.1; // relatively high for imagination
+    private static final String IMAGE_MODEL = "gpt-5";
 
     private EditText etSeed;
     private Button btnStart;
     private Button btnNext;
-    private TextView tvOutput;
-    private ProgressBar progress;
+
+    // Container that will hold full page blocks (title + text + image)
+    private LinearLayout pagesContainer;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private OpenAiClient openAi;
+    private OpenAiClient openAiImages;
     private final List<ChatMessage> conversation = new ArrayList<>();
 
     private int pageIndex = 0;
 
     // Responses API conversation chaining.
-    private String previousResponseId = null;
+    private String previousTextResponseId = null;
+    private String previousImageResponseId = null;
+
+    private String seedPrompt = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,22 +78,34 @@ public class StoryModeActivity extends AppCompatActivity {
         etSeed = findViewById(R.id.etSeed);
         btnStart = findViewById(R.id.btnStart);
         btnNext = findViewById(R.id.btnNext);
-        tvOutput = findViewById(R.id.tvOutput);
-        progress = findViewById(R.id.progress);
+        pagesContainer = findViewById(R.id.pagesContainer);
 
-        openAi = new OpenAiClient(new OkHttpClient(), OPENAI_API_KEY);
+        // Text calls: default timeouts.
+        OkHttpClient textHttp = new OkHttpClient();
+
+        // Image calls can take longer: bump call/read/write timeouts.
+        OkHttpClient imageHttp = new OkHttpClient.Builder()
+                .callTimeout(java.time.Duration.ofSeconds(120))
+                .connectTimeout(java.time.Duration.ofSeconds(30))
+                .readTimeout(java.time.Duration.ofSeconds(120))
+                .writeTimeout(java.time.Duration.ofSeconds(120))
+                .build();
+
+        openAi = new OpenAiClient(textHttp, OPENAI_API_KEY);
+        openAiImages = new OpenAiClient(imageHttp, OPENAI_API_KEY);
 
         btnStart.setOnClickListener(v -> startStory());
         btnNext.setOnClickListener(v -> nextPage());
 
         if (savedInstanceState != null) {
-            // Minimal state restore for rotation: keep text, enable next based on whether we started.
-            tvOutput.setText(savedInstanceState.getString("output", tvOutput.getText().toString()));
+            // Minimal state restore for rotation.
             etSeed.setText(savedInstanceState.getString("seed", ""));
             pageIndex = savedInstanceState.getInt("pageIndex", 0);
             boolean started = savedInstanceState.getBoolean("started", false);
             btnNext.setEnabled(started);
-            previousResponseId = savedInstanceState.getString("previousResponseId", null);
+            previousTextResponseId = savedInstanceState.getString("previousTextResponseId", null);
+            previousImageResponseId = savedInstanceState.getString("previousImageResponseId", null);
+            seedPrompt = savedInstanceState.getString("seedPrompt", null);
         }
     }
 
@@ -89,10 +113,11 @@ public class StoryModeActivity extends AppCompatActivity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString("seed", etSeed.getText() != null ? etSeed.getText().toString() : "");
-        outState.putString("output", tvOutput.getText() != null ? tvOutput.getText().toString() : "");
         outState.putInt("pageIndex", pageIndex);
         outState.putBoolean("started", btnNext.isEnabled());
-        outState.putString("previousResponseId", previousResponseId);
+        outState.putString("previousTextResponseId", previousTextResponseId);
+        outState.putString("previousImageResponseId", previousImageResponseId);
+        outState.putString("seedPrompt", seedPrompt);
     }
 
     @Override
@@ -108,103 +133,245 @@ public class StoryModeActivity extends AppCompatActivity {
             return;
         }
 
+        seedPrompt = seed;
+
         conversation.clear();
         pageIndex = 0;
-        previousResponseId = null;
+        previousTextResponseId = null;
+        previousImageResponseId = null;
 
-        // System instruction: generate ONLY an image description per page.
-        conversation.add(new ChatMessage(
-                "system",
-                "You create page-by-page prompts for a children's picture book. " +
-                        "Return ONLY a simple, vivid image description for one page (no title, no extra commentary). " +
-                        "Keep it child-friendly, concrete, and easy to illustrate. 1 short paragraph max."
-        ));
+        // Starting a new story should reset pages (including images).
+        pagesContainer.removeAllViews();
 
-        // User seed.
-        conversation.add(new ChatMessage(
-                "user",
-                "Story seed: " + seed + "\n" +
-                        "Generate the image description for Page 1."
-        ));
-
-        tvOutput.setText("Generating Page 1…");
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
 
-        queryAndAppendAssistantMessage(/*appendToOutput=*/false);
+        queryAndAppendAssistantMessage();
     }
 
     private void nextPage() {
-        // Ask for the next page while keeping prior conversation.
         conversation.add(new ChatMessage("user", "Generate the image description for Page " + (pageIndex + 1) + "."));
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
-        queryAndAppendAssistantMessage(/*appendToOutput=*/true);
+        queryAndAppendAssistantMessage();
     }
 
-    private void queryAndAppendAssistantMessage(boolean appendToOutput) {
-        setLoading(true);
+    private void queryAndAppendAssistantMessage() {
+        // No global spinner; per-page spinner will be shown under the new page block.
 
         io.execute(() -> {
+            final int pageNumberToRender = pageIndex + 1;
+            final LinearLayout[] pageBlockHolder = new LinearLayout[1];
+            main.post(() -> {
+                LinearLayout pageBlock = createPageBlock(pageNumberToRender);
+                pagesContainer.addView(pageBlock);
+                setPageImageLoading(pageBlock, true);
+                pageBlockHolder[0] = pageBlock;
+            });
+
             try {
-                // Turn the current conversation into a single prompt. The server will keep state
-                // via previous_response_id chaining.
-                String input = buildInputTranscript(conversation);
+                String input;
+                if (previousTextResponseId == null) {
+                    input = "You create page-by-page prompts for a children's picture book. " +
+                            "Return ONLY a simple, vivid image description for one page (no title, no extra commentary). " +
+                            "Keep it child-friendly, concrete, and easy to illustrate. 1 short paragraph max.\n\n" +
+                            "Story seed: " + (seedPrompt != null ? seedPrompt : "") + "\n" +
+                            "Generate the image description for Page 1.";
+                } else {
+                    input = "Generate the image description for Page " + pageNumberToRender + ".";
+                }
 
                 OpenAiClient.ResponseResult result = openAi.createResponse(
                         MODEL,
                         TEMPERATURE,
                         input,
-                        previousResponseId
+                        previousTextResponseId
                 );
 
-                // Update the chain id for the next turn.
                 if (result.responseId != null && !result.responseId.trim().isEmpty()) {
-                    previousResponseId = result.responseId;
+                    previousTextResponseId = result.responseId;
                 }
 
                 String assistant = result.outputText;
-
-                // Save assistant to conversation so our local transcript stays coherent too.
                 conversation.add(new ChatMessage("assistant", assistant));
 
                 main.post(() -> {
-                    pageIndex += 1;
+                    pageIndex = pageNumberToRender;
+                    LinearLayout pageBlock = pageBlockHolder[0];
+                    if (pageBlock != null) {
+                        setPageText(pageBlock, assistant);
+                    }
+                });
 
-                    if (!appendToOutput) {
-                        tvOutput.setText("Page " + pageIndex + "\n" + assistant);
-                    } else {
-                        String current = tvOutput.getText() != null ? tvOutput.getText().toString() : "";
-                        tvOutput.setText(current + "\n\n" + "Page " + pageIndex + "\n" + assistant);
+                OpenAiClient.ImageResult imageResult = openAiImages.generateImage(
+                        IMAGE_MODEL,
+                        assistant,
+                        previousImageResponseId
+                );
+
+                if (imageResult.responseId != null && !imageResult.responseId.trim().isEmpty()) {
+                    previousImageResponseId = imageResult.responseId;
+                }
+
+                Bitmap bitmap = decodeBase64ToBitmap(imageResult.imageBase64);
+
+                main.post(() -> {
+                    LinearLayout pageBlock = pageBlockHolder[0];
+                    if (pageBlock != null) {
+                        setPageImageLoading(pageBlock, false);
+                        if (bitmap != null) {
+                            setPageImage(pageBlock, bitmap, pageNumberToRender);
+                        } else {
+                            setPageError(pageBlock, "No image returned.");
+                        }
                     }
 
                     btnNext.setEnabled(true);
                     btnStart.setEnabled(true);
-                    setLoading(false);
                 });
             } catch (IOException e) {
                 main.post(() -> {
-                    String msg = e.getMessage() != null ? e.getMessage() : e.toString();
-                    tvOutput.setText((tvOutput.getText() != null ? tvOutput.getText().toString() : "") +
-                            "\n\n[Error]\n" + msg);
+                    LinearLayout pageBlock = pageBlockHolder[0];
+                    if (pageBlock != null) {
+                        setPageImageLoading(pageBlock, false);
+                        setPageError(pageBlock, (e.getMessage() != null ? e.getMessage() : e.toString()));
+                    }
                     btnStart.setEnabled(true);
                     btnNext.setEnabled(pageIndex > 0);
-                    setLoading(false);
                 });
             }
         });
     }
 
-    private static String buildInputTranscript(List<ChatMessage> msgs) {
-        StringBuilder sb = new StringBuilder();
-        for (ChatMessage m : msgs) {
-            // Keep it simple and readable for the model.
-            sb.append(m.role).append(": ").append(m.content).append("\n");
-        }
-        return sb.toString();
+    private LinearLayout createPageBlock(int pageNumber) {
+        LinearLayout block = new LinearLayout(this);
+        block.setOrientation(LinearLayout.VERTICAL);
+        block.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        LinearLayout.LayoutParams blockLp = (LinearLayout.LayoutParams) block.getLayoutParams();
+        blockLp.topMargin = dpToPx(16);
+        block.setLayoutParams(blockLp);
+
+        TextView title = new TextView(this);
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        title.setText("Page " + pageNumber);
+        title.setTextSize(18);
+        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+        title.setTag("pageTitle");
+
+        TextView text = new TextView(this);
+        text.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        LinearLayout.LayoutParams textLp = (LinearLayout.LayoutParams) text.getLayoutParams();
+        textLp.topMargin = dpToPx(6);
+        text.setLayoutParams(textLp);
+        text.setText("");
+        text.setTag("pageText");
+
+        TextView error = new TextView(this);
+        error.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        LinearLayout.LayoutParams errLp = (LinearLayout.LayoutParams) error.getLayoutParams();
+        errLp.topMargin = dpToPx(8);
+        error.setLayoutParams(errLp);
+        error.setVisibility(View.GONE);
+        error.setTag("pageError");
+
+        ProgressBar imageProgress = new ProgressBar(this);
+        imageProgress.setIndeterminate(true);
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        pbLp.topMargin = dpToPx(10);
+        pbLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        imageProgress.setLayoutParams(pbLp);
+        imageProgress.setTag("imageProgress");
+        imageProgress.setVisibility(View.GONE);
+
+        ImageView image = new ImageView(this);
+        image.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        LinearLayout.LayoutParams imgLp = (LinearLayout.LayoutParams) image.getLayoutParams();
+        imgLp.topMargin = dpToPx(10);
+        image.setLayoutParams(imgLp);
+        image.setAdjustViewBounds(true);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image.setVisibility(View.GONE);
+        image.setTag("pageImage");
+
+        block.addView(title);
+        block.addView(text);
+        block.addView(error);
+        block.addView(imageProgress);
+        block.addView(image);
+        return block;
     }
 
-    private void setLoading(boolean loading) {
-        progress.setVisibility(loading ? View.VISIBLE : View.GONE);
+    private void setPageText(LinearLayout pageBlock, String text) {
+        if (pageBlock == null) return;
+        View t = pageBlock.findViewWithTag("pageText");
+        if (t instanceof TextView) {
+            ((TextView) t).setText(text != null ? text : "");
+        }
+    }
+
+    private void setPageError(LinearLayout pageBlock, String errorText) {
+        if (pageBlock == null) return;
+        View e = pageBlock.findViewWithTag("pageError");
+        if (e instanceof TextView) {
+            TextView tv = (TextView) e;
+            tv.setText(errorText != null ? errorText : "Unknown error");
+            tv.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void setPageImageLoading(LinearLayout pageBlock, boolean loading) {
+        if (pageBlock == null) return;
+        View pb = pageBlock.findViewWithTag("imageProgress");
+        if (pb != null) {
+            pb.setVisibility(loading ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void setPageImage(LinearLayout pageBlock, Bitmap bitmap, int pageNumber) {
+        if (pageBlock == null || bitmap == null) return;
+        View v = pageBlock.findViewWithTag("pageImage");
+        if (!(v instanceof ImageView)) return;
+
+        ImageView iv = (ImageView) v;
+        iv.setAdjustViewBounds(true);
+        iv.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        iv.setContentDescription("Generated story image for page " + pageNumber);
+        iv.setImageBitmap(bitmap);
+        iv.setVisibility(View.VISIBLE);
+    }
+
+    private int dpToPx(int dp) {
+        float density = getResources().getDisplayMetrics().density;
+        return Math.round(dp * density);
+    }
+
+
+    private static Bitmap decodeBase64ToBitmap(String base64) {
+        if (base64 == null || base64.trim().isEmpty()) return null;
+        try {
+            byte[] bytes = Base64.decode(base64, Base64.DEFAULT);
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

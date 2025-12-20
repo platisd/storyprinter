@@ -1,5 +1,7 @@
 package com.example.storyprinter.openai;
 
+import android.util.Log;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -36,6 +38,17 @@ public final class OpenAiClient {
         public ResponseResult(String responseId, String outputText) {
             this.responseId = responseId;
             this.outputText = outputText;
+        }
+    }
+
+    /** Result of an image generation call: base64 PNG (or other) plus response id for chaining. */
+    public static final class ImageResult {
+        public final String responseId;
+        public final String imageBase64;
+
+        public ImageResult(String responseId, String imageBase64) {
+            this.responseId = responseId;
+            this.imageBase64 = imageBase64;
         }
     }
 
@@ -99,6 +112,84 @@ public final class OpenAiClient {
         }
     }
 
+    /**
+     * Generates an image via the Responses API using the image_generation tool.
+     *
+     * Pass previousResponseId to keep a consistent multi-turn chain.
+     */
+    public ImageResult generateImage(
+            String model,
+            String prompt,
+            String previousResponseId
+    ) throws IOException {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("model", model);
+            payload.put("input", prompt);
+
+            // Enable the image generation tool.
+            JSONArray tools = new JSONArray();
+            JSONObject tool = new JSONObject();
+            tool.put("type", "image_generation");
+            tool.put("model", "gpt-image-1-mini");
+            tool.put("size", "1024x1536");
+            tools.put(tool);
+            payload.put("tools", tools);
+
+            if (previousResponseId != null && !previousResponseId.trim().isEmpty()) {
+                payload.put("previous_response_id", previousResponseId);
+            }
+        } catch (JSONException e) {
+            throw new IOException("Failed to build JSON payload", e);
+        }
+
+        Request req = new Request.Builder()
+                .url("https://api.openai.com/v1/responses")
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(payload.toString(), JSON))
+                .build();
+
+        // Print out the curl command for debugging purposes
+        String curlCommand = "curl -X POST https://api.openai.com/v1/responses \\\n" +
+                "  -H \"Authorization: Bearer " + apiKey + "\" \\\n" +
+                "  -H \"Content-Type: application/json\" \\\n" +
+                "  -d '" + payload.toString().replace("'", "\\'") + "'";
+        Log.i("OpenAiClient", "Curl command:\n" + curlCommand);
+
+        try (Response resp = http.newCall(req).execute()) {
+            String body = resp.body() != null ? resp.body().string() : "";
+            if (!resp.isSuccessful()) {
+                throw new IOException("OpenAI error: HTTP " + resp.code() + "\n" + body);
+            }
+
+            try {
+                JSONObject json = new JSONObject(body);
+                String responseId = json.optString("id", "");
+
+                // Find image_generation_call outputs and return the first result.
+                JSONArray output = json.optJSONArray("output");
+                String imageBase64 = extractImageBase64(output);
+                if (imageBase64.isEmpty()) {
+                    String status = json.optString("status", "");
+                    JSONObject err = json.optJSONObject("error");
+                    if (err != null) {
+                        throw new IOException("OpenAI image generation error: " + err + "\n" + body);
+                    }
+                    throw new IOException(
+                            "OpenAI response contained no image_generation_call result" +
+                                    (status.isEmpty() ? "" : (" (status=" + status + ")")) +
+                                    ": \n" + body
+                    );
+                }
+
+                return new ImageResult(responseId, imageBase64);
+            } catch (JSONException e) {
+                throw new IOException("Failed to parse OpenAI response\n" + body, e);
+            }
+        }
+    }
+
     private static String extractOutputText(JSONArray output) {
         if (output == null || output.length() == 0) return "";
 
@@ -125,6 +216,24 @@ public final class OpenAiClient {
         }
 
         return sb.toString().trim();
+    }
+
+    private static String extractImageBase64(JSONArray output) {
+        if (output == null || output.length() == 0) return "";
+
+        for (int i = 0; i < output.length(); i++) {
+            JSONObject item = output.optJSONObject(i);
+            if (item == null) continue;
+
+            // Per docs/example: output item type "image_generation_call" has "result" as base64.
+            if (!"image_generation_call".equals(item.optString("type"))) continue;
+
+            String result = item.optString("result", "");
+            if (result != null && !result.trim().isEmpty()) {
+                return result.trim();
+            }
+        }
+        return "";
     }
 
     /**
