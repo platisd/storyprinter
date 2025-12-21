@@ -133,7 +133,7 @@ public final class OpenAiClient {
             tool.put("type", "image_generation");
             tool.put("model", "gpt-image-1-mini");
             tool.put("size", "1024x1536");
-            tool.put("quantity", "low");
+            tool.put("quality", "low");
             tools.put(tool);
             payload.put("tools", tools);
 

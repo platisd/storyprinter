@@ -22,12 +22,10 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-import com.example.storyprinter.openai.ChatMessage;
 import com.example.storyprinter.openai.OpenAiClient;
+import com.example.storyprinter.story.StorySession;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -45,6 +43,9 @@ public class StoryModeActivity extends AppCompatActivity {
     private EditText etSeed;
     private Button btnStart;
     private Button btnNext;
+    private Button btnClear;
+    private TextView tvOutput;
+    private ProgressBar progress;
 
     // Container that will hold full page blocks (title + text + image)
     private LinearLayout pagesContainer;
@@ -54,15 +55,10 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private OpenAiClient openAi;
     private OpenAiClient openAiImages;
-    private final List<ChatMessage> conversation = new ArrayList<>();
-
-    private int pageIndex = 0;
-
-    // Responses API conversation chaining.
-    private String previousTextResponseId = null;
-    private String previousImageResponseId = null;
 
     private String seedPrompt = null;
+
+    private final StorySession session = StorySession.get();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,7 +74,20 @@ public class StoryModeActivity extends AppCompatActivity {
         etSeed = findViewById(R.id.etSeed);
         btnStart = findViewById(R.id.btnStart);
         btnNext = findViewById(R.id.btnNext);
+        btnClear = findViewById(R.id.btnClear);
+        // tvOutput/progress were removed from the layout; keep these as null.
+        tvOutput = null;
+        progress = null;
         pagesContainer = findViewById(R.id.pagesContainer);
+
+        // tvOutput is no longer used for status; keep it hidden (or we can remove it from layout later).
+        if (tvOutput != null) {
+            tvOutput.setVisibility(View.GONE);
+        }
+        // Use only per-page spinners.
+        if (progress != null) {
+            progress.setVisibility(View.GONE);
+        }
 
         // Text calls: default timeouts.
         OkHttpClient textHttp = new OkHttpClient();
@@ -96,16 +105,21 @@ public class StoryModeActivity extends AppCompatActivity {
 
         btnStart.setOnClickListener(v -> startStory());
         btnNext.setOnClickListener(v -> nextPage());
+        if (btnClear != null) {
+            btnClear.setOnClickListener(v -> clearStory());
+        }
+
+        // Restore UI from the in-memory session so navigating away/back doesn't lose pages.
+        seedPrompt = session.getSeedPrompt();
+        if (seedPrompt != null && !seedPrompt.trim().isEmpty()) {
+            etSeed.setText(seedPrompt);
+        }
+        renderPagesFromSession();
+        updateButtonsForIdleState();
 
         if (savedInstanceState != null) {
-            // Minimal state restore for rotation.
-            etSeed.setText(savedInstanceState.getString("seed", ""));
-            pageIndex = savedInstanceState.getInt("pageIndex", 0);
-            boolean started = savedInstanceState.getBoolean("started", false);
-            btnNext.setEnabled(started);
-            previousTextResponseId = savedInstanceState.getString("previousTextResponseId", null);
-            previousImageResponseId = savedInstanceState.getString("previousImageResponseId", null);
-            seedPrompt = savedInstanceState.getString("seedPrompt", null);
+            // Rotation: keep EditText value if user was typing.
+            etSeed.setText(savedInstanceState.getString("seed", etSeed.getText() != null ? etSeed.getText().toString() : ""));
         }
     }
 
@@ -113,17 +127,41 @@ public class StoryModeActivity extends AppCompatActivity {
     protected void onSaveInstanceState(Bundle outState) {
         super.onSaveInstanceState(outState);
         outState.putString("seed", etSeed.getText() != null ? etSeed.getText().toString() : "");
-        outState.putInt("pageIndex", pageIndex);
-        outState.putBoolean("started", btnNext.isEnabled());
-        outState.putString("previousTextResponseId", previousTextResponseId);
-        outState.putString("previousImageResponseId", previousImageResponseId);
-        outState.putString("seedPrompt", seedPrompt);
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         io.shutdownNow();
+    }
+
+    private void clearStory() {
+        // If a request is in-flight, shutting down the executor would be too destructive; just clear UI + session.
+        session.clear();
+        seedPrompt = null;
+
+        pagesContainer.removeAllViews();
+        btnNext.setEnabled(false);
+        btnStart.setEnabled(true);
+    }
+
+    private void renderPagesFromSession() {
+        pagesContainer.removeAllViews();
+        for (StorySession.Page p : session.snapshotPages()) {
+            LinearLayout block = createPageBlock(p.pageNumber);
+            pagesContainer.addView(block);
+            setPageText(block, p.text);
+            if (p.image != null) {
+                setPageImageLoading(block, false);
+                setPageImage(block, p.image, p.pageNumber);
+            }
+        }
+    }
+
+    private void updateButtonsForIdleState() {
+        // If we have at least one page, allow Next.
+        btnNext.setEnabled(!session.snapshotPages().isEmpty());
+        btnStart.setEnabled(true);
     }
 
     private void startStory() {
@@ -134,14 +172,15 @@ public class StoryModeActivity extends AppCompatActivity {
         }
 
         seedPrompt = seed;
-
-        conversation.clear();
-        pageIndex = 0;
-        previousTextResponseId = null;
-        previousImageResponseId = null;
+        session.clear();
+        session.setSeedPrompt(seed);
 
         // Starting a new story should reset pages (including images).
         pagesContainer.removeAllViews();
+
+        // Hide global status views (no-op; kept for safety if reintroduced later).
+        if (tvOutput != null) tvOutput.setVisibility(View.GONE);
+        if (progress != null) progress.setVisibility(View.GONE);
 
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
@@ -150,26 +189,30 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private void nextPage() {
-        conversation.add(new ChatMessage("user", "Generate the image description for Page " + (pageIndex + 1) + "."));
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
         queryAndAppendAssistantMessage();
     }
 
     private void queryAndAppendAssistantMessage() {
-        // No global spinner; per-page spinner will be shown under the new page block.
-
         io.execute(() -> {
-            final int pageNumberToRender = pageIndex + 1;
+            final int pageNumberToRender = session.getNextPageNumber();
+
             final LinearLayout[] pageBlockHolder = new LinearLayout[1];
+            final StorySession.Page[] sessionPageHolder = new StorySession.Page[1];
+
             main.post(() -> {
                 LinearLayout pageBlock = createPageBlock(pageNumberToRender);
                 pagesContainer.addView(pageBlock);
                 setPageImageLoading(pageBlock, true);
                 pageBlockHolder[0] = pageBlock;
+
+                // Create & store page immediately so session remains consistent across navigation.
+                sessionPageHolder[0] = session.addNewPage(pageNumberToRender);
             });
 
             try {
+                String previousTextResponseId = session.getPreviousTextResponseId();
                 String input;
                 if (previousTextResponseId == null) {
                     input = "You create page-by-page prompts for a children's picture book. " +
@@ -189,31 +232,38 @@ public class StoryModeActivity extends AppCompatActivity {
                 );
 
                 if (result.responseId != null && !result.responseId.trim().isEmpty()) {
-                    previousTextResponseId = result.responseId;
+                    session.setPreviousTextResponseId(result.responseId);
                 }
 
                 String assistant = result.outputText;
-                conversation.add(new ChatMessage("assistant", assistant));
+
+                StorySession.Page p = sessionPageHolder[0];
+                if (p != null) {
+                    p.text = assistant;
+                }
 
                 main.post(() -> {
-                    pageIndex = pageNumberToRender;
                     LinearLayout pageBlock = pageBlockHolder[0];
                     if (pageBlock != null) {
                         setPageText(pageBlock, assistant);
                     }
                 });
 
+                // Image generation: chain only to previous IMAGE response id.
                 OpenAiClient.ImageResult imageResult = openAiImages.generateImage(
                         IMAGE_MODEL,
                         assistant,
-                        previousImageResponseId
+                        session.getPreviousImageResponseId()
                 );
 
                 if (imageResult.responseId != null && !imageResult.responseId.trim().isEmpty()) {
-                    previousImageResponseId = imageResult.responseId;
+                    session.setPreviousImageResponseId(imageResult.responseId);
                 }
 
                 Bitmap bitmap = decodeBase64ToBitmap(imageResult.imageBase64);
+                if (p != null) {
+                    p.image = bitmap;
+                }
 
                 main.post(() -> {
                     LinearLayout pageBlock = pageBlockHolder[0];
@@ -237,7 +287,7 @@ public class StoryModeActivity extends AppCompatActivity {
                         setPageError(pageBlock, (e.getMessage() != null ? e.getMessage() : e.toString()));
                     }
                     btnStart.setEnabled(true);
-                    btnNext.setEnabled(pageIndex > 0);
+                    btnNext.setEnabled(!session.snapshotPages().isEmpty());
                 });
             }
         });
