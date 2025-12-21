@@ -1,7 +1,14 @@
 package com.example.storyprinter;
 
+import android.Manifest;
+import android.content.ContentResolver;
+import android.content.ContentValues;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,9 +22,14 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.provider.MediaStore;
+import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -26,6 +38,10 @@ import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.story.StorySession;
 
 import java.io.IOException;
+import java.io.OutputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -59,6 +75,20 @@ public class StoryModeActivity extends AppCompatActivity {
     private String seedPrompt = null;
 
     private final StorySession session = StorySession.get();
+
+    // Permission + deferred action
+    private ActivityResultLauncher<String> writeStoragePermissionLauncher;
+    private PendingImageAction pendingImageAction = null;
+
+    private static final class PendingImageAction {
+        final Bitmap bitmap;
+        final int pageNumber;
+
+        PendingImageAction(Bitmap bitmap, int pageNumber) {
+            this.bitmap = bitmap;
+            this.pageNumber = pageNumber;
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -121,6 +151,21 @@ public class StoryModeActivity extends AppCompatActivity {
             // Rotation: keep EditText value if user was typing.
             etSeed.setText(savedInstanceState.getString("seed", etSeed.getText() != null ? etSeed.getText().toString() : ""));
         }
+
+        writeStoragePermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                granted -> {
+                    if (pendingImageAction == null) return;
+                    PendingImageAction action = pendingImageAction;
+                    pendingImageAction = null;
+
+                    if (granted) {
+                        saveBitmapToGallery(action.bitmap, action.pageNumber);
+                    } else {
+                        Toast.makeText(this, "Permission denied. Can't save image.", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
     }
 
     @Override
@@ -349,25 +394,190 @@ public class StoryModeActivity extends AppCompatActivity {
         imageProgress.setTag("imageProgress");
         imageProgress.setVisibility(View.GONE);
 
+        // Image area: FrameLayout so we can overlay actions on top of the image.
+        android.widget.FrameLayout imageArea = new android.widget.FrameLayout(this);
+        LinearLayout.LayoutParams areaLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        areaLp.topMargin = dpToPx(10);
+        imageArea.setLayoutParams(areaLp);
+        imageArea.setTag("imageArea");
+
         ImageView image = new ImageView(this);
-        image.setLayoutParams(new LinearLayout.LayoutParams(
+        image.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
-        LinearLayout.LayoutParams imgLp = (LinearLayout.LayoutParams) image.getLayoutParams();
-        imgLp.topMargin = dpToPx(10);
-        image.setLayoutParams(imgLp);
         image.setAdjustViewBounds(true);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
         image.setVisibility(View.GONE);
         image.setTag("pageImage");
 
+        // Overlay: initially hidden.
+        android.widget.FrameLayout overlay = new android.widget.FrameLayout(this);
+        overlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        overlay.setVisibility(View.GONE);
+        overlay.setTag("imageOverlay");
+
+        // Semi-transparent gray scrim.
+        View scrim = new View(this);
+        scrim.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        scrim.setBackgroundColor(Color.parseColor("#80000000")); // 50% black
+        scrim.setTag("overlayScrim");
+
+        // Actions container.
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        android.widget.FrameLayout.LayoutParams actionsLp = new android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        actionsLp.gravity = android.view.Gravity.CENTER;
+        actions.setLayoutParams(actionsLp);
+        actions.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
+        actions.setTag("overlayActions");
+
+        Button btnSave = new Button(this);
+        btnSave.setText("Save image to phone");
+        btnSave.setTag("btnSaveImage");
+        LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnSave.setLayoutParams(saveLp);
+
+        Button btnPrint = new Button(this);
+        btnPrint.setText("Print");
+        btnPrint.setEnabled(false);
+        btnPrint.setTag("btnPrintImage");
+        LinearLayout.LayoutParams printLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        printLp.leftMargin = dpToPx(12);
+        btnPrint.setLayoutParams(printLp);
+
+        actions.addView(btnSave);
+        actions.addView(btnPrint);
+
+        overlay.addView(scrim);
+        overlay.addView(actions);
+
+        imageArea.addView(image);
+        imageArea.addView(overlay);
+
+        // Toggle overlay on long-press. Hide on tap outside.
+        image.setOnLongClickListener(v -> {
+            if (image.getDrawable() == null) return false;
+            showImageOverlay(block, true);
+            return true;
+        });
+        scrim.setOnClickListener(v -> showImageOverlay(block, false));
+
+        btnSave.setOnClickListener(v -> {
+            Bitmap bmp = getBitmapFromPage(block);
+            if (bmp == null) {
+                Toast.makeText(this, "No image to save yet.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            requestSaveImageToPhone(bmp, pageNumber);
+            showImageOverlay(block, false);
+        });
+
         block.addView(title);
         block.addView(text);
         block.addView(error);
         block.addView(imageProgress);
-        block.addView(image);
+        block.addView(imageArea);
         return block;
+    }
+
+    private void showImageOverlay(LinearLayout pageBlock, boolean show) {
+        if (pageBlock == null) return;
+        View overlay = pageBlock.findViewWithTag("imageOverlay");
+        if (overlay != null) {
+            overlay.setVisibility(show ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private Bitmap getBitmapFromPage(LinearLayout pageBlock) {
+        if (pageBlock == null) return null;
+        View v = pageBlock.findViewWithTag("pageImage");
+        if (!(v instanceof ImageView)) return null;
+        ImageView iv = (ImageView) v;
+        if (!(iv.getDrawable() instanceof android.graphics.drawable.BitmapDrawable)) return null;
+        return ((android.graphics.drawable.BitmapDrawable) iv.getDrawable()).getBitmap();
+    }
+
+    private void requestSaveImageToPhone(Bitmap bitmap, int pageNumber) {
+        // On Android 10+ (API 29+), saving to MediaStore doesn't require storage permissions.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                pendingImageAction = new PendingImageAction(bitmap, pageNumber);
+                writeStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+                return;
+            }
+        }
+        saveBitmapToGallery(bitmap, pageNumber);
+    }
+
+    private void saveBitmapToGallery(Bitmap bitmap, int pageNumber) {
+        if (bitmap == null) return;
+
+        io.execute(() -> {
+            Uri uri = null;
+            OutputStream os = null;
+            try {
+                String time = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+                String fileName = "story_page_" + pageNumber + "_" + time + ".png";
+
+                ContentResolver resolver = getContentResolver();
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/StoryPrinter");
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                }
+
+                uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) throw new IOException("Failed to create MediaStore record");
+
+                os = resolver.openOutputStream(uri);
+                if (os == null) throw new IOException("Failed to open output stream");
+
+                boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, os);
+                if (!ok) throw new IOException("Failed to encode PNG");
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues done = new ContentValues();
+                    done.put(MediaStore.Images.Media.IS_PENDING, 0);
+                    resolver.update(uri, done, null, null);
+                }
+
+                Uri finalUri = uri;
+                main.post(() -> Toast.makeText(this, "Saved to Photos: " + finalUri, Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                Uri toDelete = uri;
+                if (toDelete != null) {
+                    try {
+                        getContentResolver().delete(toDelete, null, null);
+                    } catch (Exception ignored) {
+                    }
+                }
+                String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+                main.post(() -> Toast.makeText(this, "Save failed: " + msg, Toast.LENGTH_LONG).show());
+            } finally {
+                if (os != null) {
+                    try {
+                        os.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        });
     }
 
     private void setPageText(LinearLayout pageBlock, String text) {
@@ -407,6 +617,9 @@ public class StoryModeActivity extends AppCompatActivity {
         iv.setContentDescription("Generated story image for page " + pageNumber);
         iv.setImageBitmap(bitmap);
         iv.setVisibility(View.VISIBLE);
+
+        // Ensure overlay is hidden when a new image comes in.
+        showImageOverlay(pageBlock, false);
     }
 
     private int dpToPx(int dp) {

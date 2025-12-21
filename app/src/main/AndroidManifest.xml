@@ -9,9 +9,17 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <!-- Android 13+ image access -->
+
+    <!--
+      Saving to gallery:
+      - Android 10+ (API 29+) doesn't require storage permission when using MediaStore.
+      - Pre-Android 10 may require legacy WRITE_EXTERNAL_STORAGE.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Android 13+ image read access (not required for saving, but keep if you later add picking/browsing images) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:targetApi="33" />
 
     <application
