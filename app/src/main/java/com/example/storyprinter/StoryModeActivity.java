@@ -3,6 +3,7 @@ package com.example.storyprinter;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -30,6 +31,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -37,6 +39,8 @@ import androidx.core.view.WindowInsetsCompat;
 import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.story.StorySession;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
@@ -89,6 +93,8 @@ public class StoryModeActivity extends AppCompatActivity {
             this.pageNumber = pageNumber;
         }
     }
+
+    private static final String TEMP_PRINT_DIR = "print_temp";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -452,7 +458,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
         Button btnPrint = new Button(this);
         btnPrint.setText("Print");
-        btnPrint.setEnabled(false);
+        btnPrint.setEnabled(true);
         btnPrint.setTag("btnPrintImage");
         LinearLayout.LayoutParams printLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         printLp.leftMargin = dpToPx(12);
@@ -482,6 +488,16 @@ public class StoryModeActivity extends AppCompatActivity {
                 return;
             }
             requestSaveImageToPhone(bmp, pageNumber);
+            showImageOverlay(block, false);
+        });
+
+        btnPrint.setOnClickListener(v -> {
+            Bitmap bmp = getBitmapFromPage(block);
+            if (bmp == null) {
+                Toast.makeText(this, "No image to print yet.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            openManualModeWithImage(bmp, pageNumber);
             showImageOverlay(block, false);
         });
 
@@ -578,6 +594,46 @@ public class StoryModeActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private void openManualModeWithImage(Bitmap bitmap, int pageNumber) {
+        io.execute(() -> {
+            try {
+                Uri uri = writeBitmapToCacheAndGetUri(bitmap, pageNumber);
+                if (uri == null) throw new IOException("Failed to create image uri");
+
+                main.post(() -> {
+                    Intent i = new Intent(this, ManualModeActivity.class);
+                    i.putExtra(ManualModeActivity.EXTRA_IMAGE_URI, uri.toString());
+                    i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    startActivity(i);
+                });
+            } catch (Exception e) {
+                String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+                main.post(() -> Toast.makeText(this, "Couldn't open print screen: " + msg, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    private Uri writeBitmapToCacheAndGetUri(Bitmap bitmap, int pageNumber) throws IOException {
+        File dir = new File(getCacheDir(), TEMP_PRINT_DIR);
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IOException("Failed to create cache dir");
+        }
+
+        String fileName = "story_page_" + pageNumber + "_print.png";
+        File file = new File(dir, fileName);
+
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            if (!ok) throw new IOException("Failed to encode PNG");
+        }
+
+        return FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                file
+        );
     }
 
     private void setPageText(LinearLayout pageBlock, String text) {

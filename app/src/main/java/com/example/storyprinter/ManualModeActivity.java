@@ -4,6 +4,7 @@ import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -49,6 +50,8 @@ import java.util.Map;
 import java.util.Set;
 
 public class ManualModeActivity extends AppCompatActivity {
+
+    public static final String EXTRA_IMAGE_URI = "com.example.storyprinter.extra.IMAGE_URI";
 
     private Spinner spinnerDevices;
     private Button btnConnect, btnSelectImage, btnPrint;
@@ -128,7 +131,45 @@ public class ManualModeActivity extends AppCompatActivity {
         loadPreferencesAndApply();
         initControls();
         setupListeners();
+
+        // If Story mode sent us an image, load it as if it were picked from the picker.
+        handleIncomingImageFromIntent(getIntent());
+
         ensurePermissionsThenLoadDevices();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingImageFromIntent(intent);
+    }
+
+    private void handleIncomingImageFromIntent(Intent intent) {
+        if (intent == null) return;
+
+        Uri uri = null;
+        try {
+            String uriString = intent.getStringExtra(EXTRA_IMAGE_URI);
+            if (uriString != null && !uriString.trim().isEmpty()) {
+                uri = Uri.parse(uriString);
+            }
+        } catch (Exception ignored) {
+        }
+
+        if (uri != null) {
+            try {
+                // Ensure we can read the content:// URI provided via FileProvider
+                getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } catch (Exception ignored) {
+                // Not persistable for FileProvider; ignore.
+            }
+
+            loadBitmapFromUri(uri);
+
+            // Consume the extra so rotation / repeated intents don't reload unexpectedly.
+            intent.removeExtra(EXTRA_IMAGE_URI);
+        }
     }
 
     private void initPermissionLaunchers() {
@@ -404,16 +445,26 @@ public class ManualModeActivity extends AppCompatActivity {
     }
 
     private void loadBitmapFromUri(@NonNull Uri uri) {
+        // If this is our own FileProvider content, we don't need media permissions.
+        boolean isOurFileProvider = false;
+        try {
+            String auth = uri.getAuthority();
+            isOurFileProvider = (auth != null && auth.equals(getPackageName() + ".fileprovider"));
+        } catch (Exception ignored) {}
+
         // Media read permission check before attempting open (API 33+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_MEDIA_IMAGES)) {
-            updateStatus("Image permission needed");
-            singlePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
-            return;
+        if (!isOurFileProvider) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_MEDIA_IMAGES)) {
+                updateStatus("Image permission needed");
+                singlePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
+                return;
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                singlePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
+                return;
+            }
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-            singlePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
-            return;
-        }
+
         try (InputStream is = getContentResolver().openInputStream(uri)) {
             if (is == null) { Toast.makeText(this, "Cannot open image", Toast.LENGTH_SHORT).show(); return; }
             Bitmap bitmap = BitmapFactory.decodeStream(is);
