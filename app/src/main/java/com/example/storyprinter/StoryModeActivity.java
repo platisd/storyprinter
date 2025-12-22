@@ -194,6 +194,12 @@ public class StoryModeActivity extends AppCompatActivity {
         pagesContainer.removeAllViews();
         btnNext.setEnabled(false);
         btnStart.setEnabled(true);
+        btnStart.setText("Start");
+
+        // Reset the input hint back to a seed.
+        if (etSeed != null) {
+            etSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
+        }
     }
 
     private void renderPagesFromSession() {
@@ -211,11 +217,26 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private void updateButtonsForIdleState() {
         // If we have at least one page, allow Next.
-        btnNext.setEnabled(!session.snapshotPages().isEmpty());
+        boolean hasPages = !session.snapshotPages().isEmpty();
+        btnNext.setEnabled(hasPages);
         btnStart.setEnabled(true);
+
+        // After the story starts, Start becomes Update.
+        btnStart.setText(hasPages ? "Update" : "Start");
+        if (etSeed != null) {
+            etSeed.setHint(hasPages
+                    ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
+                    : "Seed prompt (e.g., 'A brave bunny in space')");
+        }
     }
 
     private void startStory() {
+        // If we already have pages, Start behaves like Update: create a new page using the newly typed instruction.
+        if (!session.snapshotPages().isEmpty()) {
+            updateStory();
+            return;
+        }
+
         String seed = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
         if (TextUtils.isEmpty(seed)) {
             etSeed.setError("Please enter a seed prompt");
@@ -236,16 +257,29 @@ public class StoryModeActivity extends AppCompatActivity {
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
 
-        queryAndAppendAssistantMessage();
+        queryAndAppendAssistantMessage(null);
+    }
+
+    private void updateStory() {
+        // Take the new instruction and treat it as a steer for the next page.
+        String steer = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
+        if (TextUtils.isEmpty(steer)) {
+            etSeed.setError("Please enter an update instruction");
+            return;
+        }
+
+        btnNext.setEnabled(false);
+        btnStart.setEnabled(false);
+        queryAndAppendAssistantMessage(steer);
     }
 
     private void nextPage() {
         btnNext.setEnabled(false);
         btnStart.setEnabled(false);
-        queryAndAppendAssistantMessage();
+        queryAndAppendAssistantMessage(null);
     }
 
-    private void queryAndAppendAssistantMessage() {
+    private void queryAndAppendAssistantMessage(String steerInstructionOrNull) {
         io.execute(() -> {
             final int pageNumberToRender = session.getNextPageNumber();
 
@@ -265,12 +299,20 @@ public class StoryModeActivity extends AppCompatActivity {
             try {
                 String previousTextResponseId = session.getPreviousTextResponseId();
                 String input;
+
                 if (previousTextResponseId == null) {
+                    // First page uses the seed.
                     input = "You create page-by-page prompts for a children's picture book. " +
                             "Return ONLY a simple, vivid image description for one page (no title, no extra commentary). " +
                             "Keep it child-friendly, concrete, and easy to illustrate. 1 short paragraph max.\n\n" +
                             "Story seed: " + (seedPrompt != null ? seedPrompt : "") + "\n" +
                             "Generate the image description for Page 1.";
+                } else if (steerInstructionOrNull != null && !steerInstructionOrNull.trim().isEmpty()) {
+                    // Mid-story steering: include the new instruction as the next user input.
+                    input = "For Page " + pageNumberToRender + ", continue the story.\n" +
+                            "New instruction (apply from this page onward while keeping earlier details consistent): " +
+                            steerInstructionOrNull.trim() + "\n\n" +
+                            "Return ONLY the image description for this page.";
                 } else {
                     input = "Generate the image description for Page " + pageNumberToRender + ".";
                 }
@@ -329,6 +371,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
                     btnNext.setEnabled(true);
                     btnStart.setEnabled(true);
+                    updateButtonsForIdleState();
                 });
             } catch (IOException e) {
                 main.post(() -> {
@@ -339,6 +382,7 @@ public class StoryModeActivity extends AppCompatActivity {
                     }
                     btnStart.setEnabled(true);
                     btnNext.setEnabled(!session.snapshotPages().isEmpty());
+                    updateButtonsForIdleState();
                 });
             }
         });
