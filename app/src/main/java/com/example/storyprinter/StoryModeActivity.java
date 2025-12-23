@@ -13,17 +13,19 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Base64;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.provider.MediaStore;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -38,6 +40,7 @@ import androidx.core.view.WindowInsetsCompat;
 
 import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.story.StorySession;
+import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -60,8 +63,12 @@ public class StoryModeActivity extends AppCompatActivity {
     private static final double TEMPERATURE = 1.1; // relatively high for imagination
     private static final String IMAGE_MODEL = "gpt-5";
 
+    private volatile boolean isLoading = false;
+
     private EditText etSeed;
-    private Button btnStart;
+    private TextInputLayout tilSeed;
+    private View seedEndIconProgress;
+
     private Button btnNext;
     private Button btnClear;
     private TextView tvOutput;
@@ -107,23 +114,17 @@ public class StoryModeActivity extends AppCompatActivity {
             return insets;
         });
 
+        tilSeed = findViewById(R.id.tilSeed);
         etSeed = findViewById(R.id.etSeed);
-        btnStart = findViewById(R.id.btnStart);
+        seedEndIconProgress = findViewById(R.id.seedEndIconProgress);
+
         btnNext = findViewById(R.id.btnNext);
         btnClear = findViewById(R.id.btnClear);
+
         // tvOutput/progress were removed from the layout; keep these as null.
         tvOutput = null;
         progress = null;
         pagesContainer = findViewById(R.id.pagesContainer);
-
-        // tvOutput is no longer used for status; keep it hidden (or we can remove it from layout later).
-        if (tvOutput != null) {
-            tvOutput.setVisibility(View.GONE);
-        }
-        // Use only per-page spinners.
-        if (progress != null) {
-            progress.setVisibility(View.GONE);
-        }
 
         // Text calls: default timeouts.
         OkHttpClient textHttp = new OkHttpClient();
@@ -139,10 +140,42 @@ public class StoryModeActivity extends AppCompatActivity {
         openAi = new OpenAiClient(textHttp, OPENAI_API_KEY);
         openAiImages = new OpenAiClient(imageHttp, OPENAI_API_KEY);
 
-        btnStart.setOnClickListener(v -> startStory());
-        btnNext.setOnClickListener(v -> nextPage());
+        // Send/Update (end icon) inside the text box.
+        if (tilSeed != null) {
+            tilSeed.setEndIconOnClickListener(v -> {
+                if (isLoading) return;
+                onSendOrUpdate();
+            });
+        }
+
+        // Pressing Enter/Send on the keyboard triggers the same action.
+        if (etSeed != null) {
+            etSeed.setOnEditorActionListener((v, actionId, event) -> {
+                boolean isSendAction = actionId == EditorInfo.IME_ACTION_SEND
+                        || actionId == EditorInfo.IME_ACTION_DONE
+                        || (event != null
+                        && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == KeyEvent.ACTION_DOWN);
+
+                if (isSendAction) {
+                    if (!isLoading) {
+                        onSendOrUpdate();
+                    }
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        btnNext.setOnClickListener(v -> {
+            if (isLoading) return;
+            nextPage();
+        });
         if (btnClear != null) {
-            btnClear.setOnClickListener(v -> clearStory());
+            btnClear.setOnClickListener(v -> {
+                if (isLoading) return;
+                clearStory();
+            });
         }
 
         // Restore UI from the in-memory session so navigating away/back doesn't lose pages.
@@ -152,9 +185,9 @@ public class StoryModeActivity extends AppCompatActivity {
         }
         renderPagesFromSession();
         updateButtonsForIdleState();
+        setComposeLoading(false);
 
         if (savedInstanceState != null) {
-            // Rotation: keep EditText value if user was typing.
             etSeed.setText(savedInstanceState.getString("seed", etSeed.getText() != null ? etSeed.getText().toString() : ""));
         }
 
@@ -172,6 +205,33 @@ public class StoryModeActivity extends AppCompatActivity {
                     }
                 }
         );
+    }
+
+    private void onSendOrUpdate() {
+        // First interaction starts the story, later interactions steer (Update).
+        if (session.snapshotPages().isEmpty()) {
+            startStory();
+        } else {
+            updateStory();
+        }
+    }
+
+    private void setComposeLoading(boolean loading) {
+        isLoading = loading;
+
+        if (tilSeed != null) {
+            tilSeed.setEndIconVisible(!loading);
+            tilSeed.setEnabled(!loading);
+        }
+        if (etSeed != null) {
+            etSeed.setEnabled(!loading);
+        }
+        if (seedEndIconProgress != null) {
+            seedEndIconProgress.setVisibility(loading ? View.VISIBLE : View.GONE);
+        }
+
+        if (btnNext != null) btnNext.setEnabled(!loading && !session.snapshotPages().isEmpty());
+        if (btnClear != null) btnClear.setEnabled(!loading);
     }
 
     @Override
@@ -193,11 +253,13 @@ public class StoryModeActivity extends AppCompatActivity {
 
         pagesContainer.removeAllViews();
         btnNext.setEnabled(false);
-        btnStart.setEnabled(true);
-        btnStart.setText("Start");
+        setComposeLoading(false);
 
         // Reset the input hint back to a seed.
-        if (etSeed != null) {
+        if (tilSeed != null) {
+            tilSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
+            tilSeed.setEndIconDrawable(R.drawable.ic_send_24);
+        } else if (etSeed != null) {
             etSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
         }
     }
@@ -216,14 +278,17 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private void updateButtonsForIdleState() {
-        // If we have at least one page, allow Next.
         boolean hasPages = !session.snapshotPages().isEmpty();
         btnNext.setEnabled(hasPages);
-        btnStart.setEnabled(true);
 
-        // After the story starts, Start becomes Update.
-        btnStart.setText(hasPages ? "Update" : "Start");
-        if (etSeed != null) {
+        if (tilSeed != null) {
+            tilSeed.setHint(hasPages
+                    ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
+                    : "Seed prompt (e.g., 'A brave bunny in space')");
+
+            // Swap end icon: send before story starts, slick update icon after.
+            tilSeed.setEndIconDrawable(hasPages ? R.drawable.ic_update_24 : R.drawable.ic_send_24);
+        } else if (etSeed != null) {
             etSeed.setHint(hasPages
                     ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
                     : "Seed prompt (e.g., 'A brave bunny in space')");
@@ -231,12 +296,6 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private void startStory() {
-        // If we already have pages, Start behaves like Update: create a new page using the newly typed instruction.
-        if (!session.snapshotPages().isEmpty()) {
-            updateStory();
-            return;
-        }
-
         String seed = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
         if (TextUtils.isEmpty(seed)) {
             etSeed.setError("Please enter a seed prompt");
@@ -255,13 +314,12 @@ public class StoryModeActivity extends AppCompatActivity {
         if (progress != null) progress.setVisibility(View.GONE);
 
         btnNext.setEnabled(false);
-        btnStart.setEnabled(false);
+        setComposeLoading(true);
 
         queryAndAppendAssistantMessage(null);
     }
 
     private void updateStory() {
-        // Take the new instruction and treat it as a steer for the next page.
         String steer = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
         if (TextUtils.isEmpty(steer)) {
             etSeed.setError("Please enter an update instruction");
@@ -269,13 +327,13 @@ public class StoryModeActivity extends AppCompatActivity {
         }
 
         btnNext.setEnabled(false);
-        btnStart.setEnabled(false);
+        setComposeLoading(true);
         queryAndAppendAssistantMessage(steer);
     }
 
     private void nextPage() {
         btnNext.setEnabled(false);
-        btnStart.setEnabled(false);
+        setComposeLoading(true);
         queryAndAppendAssistantMessage(null);
     }
 
@@ -291,8 +349,6 @@ public class StoryModeActivity extends AppCompatActivity {
                 pagesContainer.addView(pageBlock);
                 setPageImageLoading(pageBlock, true);
                 pageBlockHolder[0] = pageBlock;
-
-                // Create & store page immediately so session remains consistent across navigation.
                 sessionPageHolder[0] = session.addNewPage(pageNumberToRender);
             });
 
@@ -369,8 +425,7 @@ public class StoryModeActivity extends AppCompatActivity {
                         }
                     }
 
-                    btnNext.setEnabled(true);
-                    btnStart.setEnabled(true);
+                    setComposeLoading(false);
                     updateButtonsForIdleState();
                 });
             } catch (IOException e) {
@@ -380,8 +435,7 @@ public class StoryModeActivity extends AppCompatActivity {
                         setPageImageLoading(pageBlock, false);
                         setPageError(pageBlock, (e.getMessage() != null ? e.getMessage() : e.toString()));
                     }
-                    btnStart.setEnabled(true);
-                    btnNext.setEnabled(!session.snapshotPages().isEmpty());
+                    setComposeLoading(false);
                     updateButtonsForIdleState();
                 });
             }

@@ -19,35 +19,58 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <EditText
-        android:id="@+id/etSeed"
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/tilSeed"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
         android:hint="Seed prompt (e.g., 'A brave bunny in space')"
-        android:inputType="textCapSentences|textMultiLine"
-        android:minLines="2"
-        android:maxLines="4"
+        app:endIconMode="custom"
+        app:endIconDrawable="@drawable/ic_send_24"
         app:layout_constraintTop_toBottomOf="@id/titleStory"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="12dp" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/etSeed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textCapSentences"
+            android:imeOptions="actionSend"
+            android:maxLines="1"
+            android:singleLine="true" />
+
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Inline spinner shown on top of the end icon area while loading -->
+    <FrameLayout
+        android:id="@+id/seedEndIconProgress"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="12dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/tilSeed"
+        app:layout_constraintTop_toTopOf="@id/tilSeed"
+        app:layout_constraintBottom_toBottomOf="@id/tilSeed">
+
+        <ProgressBar
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/rowButtons"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        app:layout_constraintTop_toBottomOf="@id/etSeed"
+        android:layout_marginTop="12dp"
+        app:layout_constraintTop_toBottomOf="@id/tilSeed"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="12dp">
-
-        <Button
-            android:id="@+id/btnStart"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Start" />
+        app:layout_constraintEnd_toEndOf="parent">
 
         <Button
             android:id="@+id/btnNext"
@@ -55,8 +78,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Next"
-            android:enabled="false"
-            android:layout_marginStart="12dp" />
+            android:enabled="false" />
 
         <Button
             android:id="@+id/btnClear"
