@@ -78,6 +78,7 @@ public class StoryModeActivity extends AppCompatActivity {
     private LinearLayout pagesContainer;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    private final ExecutorService diskIo = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private OpenAiClient openAi;
@@ -243,7 +244,8 @@ public class StoryModeActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        io.shutdownNow();
+        // Don't shut down io here (story generation should survive navigation).
+        // Also don't aggressively shut down diskIo here for the same reason.
     }
 
     private void clearStory() {
@@ -640,7 +642,7 @@ public class StoryModeActivity extends AppCompatActivity {
     private void saveBitmapToGallery(Bitmap bitmap, int pageNumber) {
         if (bitmap == null) return;
 
-        io.execute(() -> {
+        diskIo.execute(() -> {
             Uri uri = null;
             OutputStream os = null;
             try {
@@ -695,7 +697,8 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private void openManualModeWithImage(Bitmap bitmap, int pageNumber) {
-        io.execute(() -> {
+        // Navigation should happen immediately; file writing can happen in the background.
+        diskIo.execute(() -> {
             try {
                 Uri uri = writeBitmapToCacheAndGetUri(bitmap, pageNumber);
                 if (uri == null) throw new IOException("Failed to create image uri");
