@@ -139,6 +139,10 @@ public class ManualModeActivity extends AppCompatActivity {
 
         initPermissionLaunchers();
         initViews();
+
+        // Ensure the initial state is correct (Send must be disabled until we have image + connection).
+        refreshSendAvailability();
+
         loadPreferencesAndApply();
         initControls();
         setupListeners();
@@ -448,13 +452,15 @@ public class ManualModeActivity extends AppCompatActivity {
                     // If we already have an image (e.g. coming from Story mode), allow printing right away.
                     // We rely on the already-processed bitmap if available; otherwise kick off processing now.
                     if (processedBitmap != null) {
-                        btnPrint.setEnabled(true);
+                        // ...handled by refreshSendAvailability()
                     } else if (originalBitmap != null) {
                         processCurrentImageAsync();
                     }
                 } else {
                     updateStatus("Failed to connect");
                 }
+
+                refreshSendAvailability();
             });
         }).start();
     }
@@ -500,6 +506,7 @@ public class ManualModeActivity extends AppCompatActivity {
             updateStatus("Image loaded");
             imagePreview.setImageDrawable(null);
             processingGeneration++; // invalidate prior processing
+            refreshSendAvailability();
             scheduleLiveReprocess();
 
             // If we're already connected, make sure we process immediately so "Send" is available
@@ -532,11 +539,20 @@ public class ManualModeActivity extends AppCompatActivity {
     }
 
     private void sendCurrentImage() {
-        if (processedBitmap == null) { Toast.makeText(this, "Select an image first", Toast.LENGTH_SHORT).show(); return; }
-        if (!connectionManager.isConnected()) { Toast.makeText(this, "Connect to a device first", Toast.LENGTH_SHORT).show(); return; }
+        if (processedBitmap == null) {
+            Toast.makeText(this, "Select an image first", Toast.LENGTH_SHORT).show();
+            refreshSendAvailability();
+            return;
+        }
+        if (connectionManager == null || !connectionManager.isConnected()) {
+            Toast.makeText(this, "Connect to a device first", Toast.LENGTH_SHORT).show();
+            refreshSendAvailability();
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
             singlePermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT);
-            return; }
+            return;
+        }
         updateStatus("Sending image...");
         btnPrint.setEnabled(false);
         final Bitmap toSend = processedBitmap;
@@ -546,7 +562,7 @@ public class ManualModeActivity extends AppCompatActivity {
             byte[] escpos = PhomemoEscPosEncoder.encodeImage(raster, toSend.getWidth(), toSend.getHeight());
             connectionManager.sendImage(escpos);
             runOnUiThread(() -> {
-                btnPrint.setEnabled(true);
+                refreshSendAvailability();
                 updateStatus("Image sent");
             });
         }).start();
@@ -568,7 +584,7 @@ public class ManualModeActivity extends AppCompatActivity {
                 }
                 processedBitmap = processed;
                 imagePreview.setImageBitmap(preview != null ? preview : processedBitmap);
-                btnPrint.setEnabled(connectionManager.isConnected());
+                refreshSendAvailability();
                 updateStatus("Processed (" + processed.getWidth() + "x" + processed.getHeight() + ")");
             });
         }).start();
@@ -701,5 +717,13 @@ public class ManualModeActivity extends AppCompatActivity {
             }
         });
         btnPrint.setOnClickListener(v -> sendCurrentImage());
+    }
+
+    private void refreshSendAvailability() {
+        boolean hasImage = processedBitmap != null;
+        boolean isConnected = (connectionManager != null && connectionManager.isConnected());
+        if (btnPrint != null) {
+            btnPrint.setEnabled(hasImage && isConnected);
+        }
     }
 }
