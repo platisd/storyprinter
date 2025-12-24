@@ -452,16 +452,42 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private LinearLayout createPageBlock(int pageNumber) {
-        LinearLayout block = new LinearLayout(this);
-        block.setOrientation(LinearLayout.VERTICAL);
-        block.setLayoutParams(new LinearLayout.LayoutParams(
+        // Outer container so we can keep current method signature (LinearLayout) while using a CardView inside.
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        LinearLayout.LayoutParams blockLp = (LinearLayout.LayoutParams) block.getLayoutParams();
-        blockLp.topMargin = dpToPx(16);
-        block.setLayoutParams(blockLp);
+        LinearLayout.LayoutParams outerLp = (LinearLayout.LayoutParams) outer.getLayoutParams();
+        outerLp.topMargin = dpToPx(16);
+        outer.setLayoutParams(outerLp);
+
+        // Material 3 card section.
+        com.google.android.material.card.MaterialCardView card = new com.google.android.material.card.MaterialCardView(this);
+        card.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        // Match MainActivity card styling.
+        card.setCardElevation(0f);
+        card.setStrokeWidth(dpToPx(1));
+        card.setStrokeColor(com.google.android.material.color.MaterialColors.getColor(
+                this,
+                com.google.android.material.R.attr.colorOutlineVariant,
+                Color.LTGRAY
+        ));
+
+        // Inner content.
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+        int pad = dpToPx(16);
+        content.setPadding(pad, pad, pad, pad);
 
         TextView title = new TextView(this);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -469,8 +495,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
         title.setText("Page " + pageNumber);
-        title.setTextSize(18);
-        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
+        title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
         title.setTag("pageTitle");
 
         TextView text = new TextView(this);
@@ -479,9 +504,15 @@ public class StoryModeActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
         LinearLayout.LayoutParams textLp = (LinearLayout.LayoutParams) text.getLayoutParams();
-        textLp.topMargin = dpToPx(6);
+        textLp.topMargin = dpToPx(8);
         text.setLayoutParams(textLp);
         text.setText("");
+        text.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
+        text.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                this,
+                com.google.android.material.R.attr.colorOnSurface,
+                Color.DKGRAY
+        ));
         text.setTag("pageText");
 
         TextView error = new TextView(this);
@@ -493,6 +524,12 @@ public class StoryModeActivity extends AppCompatActivity {
         errLp.topMargin = dpToPx(8);
         error.setLayoutParams(errLp);
         error.setVisibility(View.GONE);
+        error.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+        error.setTextColor(com.google.android.material.color.MaterialColors.getColor(
+                this,
+                com.google.android.material.R.attr.colorError,
+                Color.RED
+        ));
         error.setTag("pageError");
 
         ProgressBar imageProgress = new ProgressBar(this);
@@ -501,7 +538,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        pbLp.topMargin = dpToPx(10);
+        pbLp.topMargin = dpToPx(12);
         pbLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
         imageProgress.setLayoutParams(pbLp);
         imageProgress.setTag("imageProgress");
@@ -513,7 +550,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
-        areaLp.topMargin = dpToPx(10);
+        areaLp.topMargin = dpToPx(12);
         imageArea.setLayoutParams(areaLp);
         imageArea.setTag("imageArea");
 
@@ -536,13 +573,13 @@ public class StoryModeActivity extends AppCompatActivity {
         overlay.setVisibility(View.GONE);
         overlay.setTag("imageOverlay");
 
-        // Semi-transparent gray scrim.
+        // Semi-transparent scrim.
         View scrim = new View(this);
         scrim.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        scrim.setBackgroundColor(Color.parseColor("#80000000")); // 50% black
+        scrim.setBackgroundColor(Color.parseColor("#80000000"));
         scrim.setTag("overlayScrim");
 
         // Actions container.
@@ -557,13 +594,16 @@ public class StoryModeActivity extends AppCompatActivity {
         actions.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
         actions.setTag("overlayActions");
 
-        Button btnSave = new Button(this);
-        btnSave.setText("Save image to phone");
+        // Use Material buttons for a consistent M3 look.
+        com.google.android.material.button.MaterialButton btnSave = new com.google.android.material.button.MaterialButton(this, null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        btnSave.setText("Save image");
         btnSave.setTag("btnSaveImage");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         btnSave.setLayoutParams(saveLp);
 
-        Button btnPrint = new Button(this);
+        com.google.android.material.button.MaterialButton btnPrint = new com.google.android.material.button.MaterialButton(this, null,
+                com.google.android.material.R.attr.materialButtonStyle);
         btnPrint.setText("Print");
         btnPrint.setEnabled(true);
         btnPrint.setTag("btnPrintImage");
@@ -583,37 +623,40 @@ public class StoryModeActivity extends AppCompatActivity {
         // Toggle overlay on long-press. Hide on tap outside.
         image.setOnLongClickListener(v -> {
             if (image.getDrawable() == null) return false;
-            showImageOverlay(block, true);
+            showImageOverlay(outer, true);
             return true;
         });
-        scrim.setOnClickListener(v -> showImageOverlay(block, false));
+        scrim.setOnClickListener(v -> showImageOverlay(outer, false));
 
         btnSave.setOnClickListener(v -> {
-            Bitmap bmp = getBitmapFromPage(block);
+            Bitmap bmp = getBitmapFromPage(outer);
             if (bmp == null) {
                 Toast.makeText(this, "No image to save yet.", Toast.LENGTH_SHORT).show();
                 return;
             }
             requestSaveImageToPhone(bmp, pageNumber);
-            showImageOverlay(block, false);
+            showImageOverlay(outer, false);
         });
 
         btnPrint.setOnClickListener(v -> {
-            Bitmap bmp = getBitmapFromPage(block);
+            Bitmap bmp = getBitmapFromPage(outer);
             if (bmp == null) {
                 Toast.makeText(this, "No image to print yet.", Toast.LENGTH_SHORT).show();
                 return;
             }
             openManualModeWithImage(bmp, pageNumber);
-            showImageOverlay(block, false);
+            showImageOverlay(outer, false);
         });
 
-        block.addView(title);
-        block.addView(text);
-        block.addView(error);
-        block.addView(imageProgress);
-        block.addView(imageArea);
-        return block;
+        content.addView(title);
+        content.addView(text);
+        content.addView(error);
+        content.addView(imageProgress);
+        content.addView(imageArea);
+
+        card.addView(content);
+        outer.addView(card);
+        return outer;
     }
 
     private void showImageOverlay(LinearLayout pageBlock, boolean show) {
