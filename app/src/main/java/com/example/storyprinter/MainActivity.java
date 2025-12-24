@@ -2,11 +2,14 @@ package com.example.storyprinter;
 
 import android.content.Intent;
 import android.os.Bundle;
+
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+
+import android.view.View;
 import android.widget.Button;
 
 public class MainActivity extends AppCompatActivity {
@@ -22,10 +25,20 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
+        Intent storyIntent = new Intent(this, StoryModeActivity.class);
+        Intent manualIntent = new Intent(this, ManualModeActivity.class);
+
+        // Backwards compatible: keep the existing IDs working.
         Button btnStory = findViewById(R.id.btnStoryMode);
         Button btnManual = findViewById(R.id.btnManualMode);
+        btnStory.setOnClickListener(v -> startActivity(storyIntent));
+        btnManual.setOnClickListener(v -> startActivity(manualIntent));
 
-        btnStory.setOnClickListener(v -> startActivity(new Intent(this, StoryModeActivity.class)));
-        btnManual.setOnClickListener(v -> startActivity(new Intent(this, ManualModeActivity.class)));
+        // New UI (Material3 cards). If present, wire them too.
+        View cardStory = findViewById(R.id.cardStory);
+        if (cardStory != null) cardStory.setOnClickListener(v -> startActivity(storyIntent));
+
+        View cardManual = findViewById(R.id.cardManual);
+        if (cardManual != null) cardManual.setOnClickListener(v -> startActivity(manualIntent));
     }
 }

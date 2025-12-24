@@ -1,3 +1,14 @@
 <resources>
     <string name="app_name">StoryPrinter</string>
+
+    <string name="main_menu_title">Pick a mode</string>
+    <string name="main_menu_subtitle">Create stories page-by-page, or print an image manually.</string>
+
+    <string name="main_menu_story_mode">Story mode</string>
+    <string name="main_menu_open_story_mode">Open Story mode</string>
+    <string name="main_menu_story_desc">Generate a children’s story page-by-page with images.</string>
+
+    <string name="main_menu_manual_mode">Manual mode</string>
+    <string name="main_menu_open_manual_mode">Open Manual mode</string>
+    <string name="main_menu_manual_desc">Pick an image and fine-tune print settings.</string>
 </resources>
