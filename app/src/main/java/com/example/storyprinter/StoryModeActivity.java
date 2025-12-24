@@ -115,6 +115,13 @@ public class StoryModeActivity extends AppCompatActivity {
             return insets;
         });
 
+        // Material 3 top app bar.
+        com.google.android.material.appbar.MaterialToolbar toolbar = findViewById(R.id.toolbarStory);
+        if (toolbar != null) {
+            toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material);
+            toolbar.setNavigationOnClickListener(v -> finish());
+        }
+
         tilSeed = findViewById(R.id.tilSeed);
         etSeed = findViewById(R.id.etSeed);
         seedEndIconProgress = findViewById(R.id.seedEndIconProgress);
@@ -260,7 +267,7 @@ public class StoryModeActivity extends AppCompatActivity {
         // Reset the input hint back to a seed.
         if (tilSeed != null) {
             tilSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
-            tilSeed.setEndIconDrawable(R.drawable.ic_send_24);
+            tilSeed.setEndIconDrawable(R.drawable.ic_arrow_forward_24);
         } else if (etSeed != null) {
             etSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
         }
@@ -288,8 +295,8 @@ public class StoryModeActivity extends AppCompatActivity {
                     ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
                     : "Seed prompt (e.g., 'A brave bunny in space')");
 
-            // Swap end icon: send before story starts, slick update icon after.
-            tilSeed.setEndIconDrawable(hasPages ? R.drawable.ic_update_24 : R.drawable.ic_send_24);
+            // Swap end icon: arrow before story starts, slick update icon after.
+            tilSeed.setEndIconDrawable(hasPages ? R.drawable.ic_update_24 : R.drawable.ic_arrow_forward_24);
         } else if (etSeed != null) {
             etSeed.setHint(hasPages
                     ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
