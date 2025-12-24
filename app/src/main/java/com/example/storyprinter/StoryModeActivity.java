@@ -260,6 +260,12 @@ public class StoryModeActivity extends AppCompatActivity {
         session.clear();
         seedPrompt = null;
 
+        // Clear the textbox as well.
+        if (etSeed != null && etSeed.getText() != null) {
+            etSeed.getText().clear();
+            etSeed.setError(null);
+        }
+
         pagesContainer.removeAllViews();
         btnNext.setEnabled(false);
         setComposeLoading(false);
