@@ -426,6 +426,14 @@ public class ManualModeActivity extends AppCompatActivity {
                 if (connectionManager.isConnected()) {
                     String dn = safeDeviceName(device);
                     updateStatus("Connected: " + (dn != null ? dn : "device"));
+
+                    // If we already have an image (e.g. coming from Story mode), allow printing right away.
+                    // We rely on the already-processed bitmap if available; otherwise kick off processing now.
+                    if (processedBitmap != null) {
+                        btnPrint.setEnabled(true);
+                    } else if (originalBitmap != null) {
+                        processCurrentImageAsync();
+                    }
                 } else {
                     updateStatus("Failed to connect");
                 }
@@ -475,6 +483,12 @@ public class ManualModeActivity extends AppCompatActivity {
             imagePreview.setImageDrawable(null);
             processingGeneration++; // invalidate prior processing
             scheduleLiveReprocess();
+
+            // If we're already connected, make sure we process immediately so "Send" is available
+            // without requiring a settings change.
+            if (connectionManager != null && connectionManager.isConnected()) {
+                processCurrentImageAsync();
+            }
         } catch (IOException e) {
             Log.e("ManualModeActivity", "Error reading image", e);
             Toast.makeText(this, "Error reading image", Toast.LENGTH_SHORT).show();
