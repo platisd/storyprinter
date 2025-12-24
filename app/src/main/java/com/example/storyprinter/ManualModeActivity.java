@@ -53,7 +53,7 @@ public class ManualModeActivity extends AppCompatActivity {
 
     public static final String EXTRA_IMAGE_URI = "com.example.storyprinter.extra.IMAGE_URI";
 
-    private Spinner spinnerDevices;
+    private com.google.android.material.textfield.MaterialAutoCompleteTextView spinnerDevices;
     private Button btnConnect, btnSelectImage, btnPrint;
     private ImageView imagePreview;
     private TextView txtStatus;
@@ -91,9 +91,13 @@ public class ManualModeActivity extends AppCompatActivity {
     // UI control fields (adjust) - remove btnReprocess, add spinnerDitherMode
     private SeekBar seekGamma, seekThreshold;
     private TextView valueGamma, valueThreshold;
-    private Switch switchInvert; // Only invert remains
+    private com.google.android.material.materialswitch.MaterialSwitch switchInvert; // M3 switch
     private Button btnReset;
-    private Spinner spinnerDitherMode;
+    private com.google.android.material.textfield.MaterialAutoCompleteTextView spinnerDitherMode;
+
+    // Adapters for exposed dropdowns
+    private ArrayAdapter<String> devicesAdapter;
+    private ArrayAdapter<String> ditherAdapter;
 
     // Preference / state persistence
     private static final String PREFS_NAME = "image_prefs";
@@ -123,6 +127,13 @@ public class ManualModeActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+
+        // Material 3 top app bar.
+        com.google.android.material.appbar.MaterialToolbar toolbar = findViewById(R.id.toolbarManual);
+        if (toolbar != null) {
+            toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material);
+            toolbar.setNavigationOnClickListener(v -> finish());
+        }
 
         connectionManager = new BluetoothConnectionManager(this);
 
@@ -248,55 +259,24 @@ public class ManualModeActivity extends AppCompatActivity {
         btnReset = findViewById(R.id.btnReset);
         spinnerDitherMode = findViewById(R.id.spinnerDitherMode);
 
-        // Remove hard-coded defaults; preferences loader will set them.
-    }
-
-    private void loadPreferencesAndApply() {
-        SharedPreferences sp = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        int gammaProgress = sp.getInt(KEY_GAMMA, DEFAULT_GAMMA_PROGRESS);
-        int threshold = sp.getInt(KEY_THRESHOLD, DEFAULT_THRESHOLD);
-        int ditherMode = sp.contains(KEY_DITHER_MODE)
-                ? sp.getInt(KEY_DITHER_MODE, DITHER_FLOYD_STEINBERG)
-                : (sp.getBoolean(KEY_FSDITHER_LEGACY, true) ? DITHER_FLOYD_STEINBERG : DITHER_NONE);
-        boolean inv = sp.getBoolean(KEY_INVERT, DEFAULT_INVERT);
-
-        // Clamp values just in case
-        if (gammaProgress < 10) gammaProgress = 10; if (gammaProgress > 150) gammaProgress = 150;
-        if (threshold < 0) threshold = 0; if (threshold > 255) threshold = 255;
-        if (ditherMode < 0 || ditherMode > 2) ditherMode = DITHER_FLOYD_STEINBERG;
-
-        // Apply to UI controls (they exist after initViews)
-        seekGamma.setProgress(gammaProgress);
-        seekThreshold.setProgress(threshold);
-        switchInvert.setChecked(inv);
-        spinnerDitherMode.setSelection(ditherMode, false);
-
-        // Update internal variables & labels
-        currentGamma = gammaProgress / 100f;
-        currentThreshold = threshold;
-        currentDitherMode = ditherMode;
-        currentInvert = inv;
-        valueGamma.setText(String.format(java.util.Locale.US, "%.2f", currentGamma));
-        valueThreshold.setText(String.valueOf(currentThreshold));
-    }
-
-    private void savePreferences() {
-        SharedPreferences sp = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        sp.edit()
-            .putInt(KEY_GAMMA, Math.round(currentGamma * 100f))
-            .putInt(KEY_THRESHOLD, currentThreshold)
-            .putInt(KEY_DITHER_MODE, currentDitherMode)
-            .putBoolean(KEY_INVERT, currentInvert)
-            .apply();
+        // Device dropdown adapter is filled in loadPairedDevices.
+        devicesAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, new ArrayList<>());
+        spinnerDevices.setAdapter(devicesAdapter);
     }
 
     private void initControls() {
-        // Setup dither mode spinner adapter
-        ArrayAdapter<String> ditherAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+        // Setup dither mode dropdown adapter
+        ditherAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1,
                 new String[]{"Floyd-Steinberg", "Ordered 8x8", "None"});
-        ditherAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerDitherMode.setAdapter(ditherAdapter);
-        spinnerDitherMode.setSelection(currentDitherMode, false);
+        spinnerDitherMode.setText(ditherAdapter.getItem(currentDitherMode), false);
+        spinnerDitherMode.setOnItemClickListener((parent, view, position, id) -> {
+            if (position != currentDitherMode) {
+                currentDitherMode = position;
+                savePreferences();
+                scheduleLiveReprocess();
+            }
+        });
 
         seekGamma.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -321,17 +301,6 @@ public class ManualModeActivity extends AppCompatActivity {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
 
-        spinnerDitherMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, android.view.View view, int position, long id) {
-                if (position != currentDitherMode) {
-                    currentDitherMode = position;
-                    savePreferences();
-                    scheduleLiveReprocess();
-                }
-            }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
-        });
-
         switchInvert.setOnCheckedChangeListener((buttonView, isChecked) -> {
             currentInvert = isChecked;
             savePreferences();
@@ -341,25 +310,54 @@ public class ManualModeActivity extends AppCompatActivity {
         btnReset.setOnClickListener(v -> {
             seekGamma.setProgress(DEFAULT_GAMMA_PROGRESS);
             seekThreshold.setProgress(DEFAULT_THRESHOLD);
-            spinnerDitherMode.setSelection(DITHER_FLOYD_STEINBERG);
+            currentDitherMode = DITHER_FLOYD_STEINBERG;
+            if (ditherAdapter != null) {
+                spinnerDitherMode.setText(ditherAdapter.getItem(currentDitherMode), false);
+            }
             switchInvert.setChecked(DEFAULT_INVERT);
             // internal vars updated by listeners
             updateStatus("Settings reset");
         });
     }
 
-    private void setupListeners() {
-        btnConnect.setOnClickListener(v -> connectToSelectedDevice());
-        btnSelectImage.setOnClickListener(v -> {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_MEDIA_IMAGES)) {
-                singlePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
-            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                singlePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
-            } else {
-                imagePickerLauncher.launch("image/*");
-            }
-        });
-        btnPrint.setOnClickListener(v -> sendCurrentImage());
+    private void loadPreferencesAndApply() {
+        SharedPreferences sp = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int gammaProgress = sp.getInt(KEY_GAMMA, DEFAULT_GAMMA_PROGRESS);
+        int threshold = sp.getInt(KEY_THRESHOLD, DEFAULT_THRESHOLD);
+        int ditherMode = sp.contains(KEY_DITHER_MODE)
+                ? sp.getInt(KEY_DITHER_MODE, DITHER_FLOYD_STEINBERG)
+                : (sp.getBoolean(KEY_FSDITHER_LEGACY, true) ? DITHER_FLOYD_STEINBERG : DITHER_NONE);
+        boolean inv = sp.getBoolean(KEY_INVERT, DEFAULT_INVERT);
+
+        // Clamp values just in case
+        if (gammaProgress < 10) gammaProgress = 10; if (gammaProgress > 150) gammaProgress = 150;
+        if (threshold < 0) threshold = 0; if (threshold > 255) threshold = 255;
+        if (ditherMode < 0 || ditherMode > 2) ditherMode = DITHER_FLOYD_STEINBERG;
+
+        // Update internal variables & labels
+        currentGamma = gammaProgress / 100f;
+        currentThreshold = threshold;
+        currentDitherMode = ditherMode;
+        currentInvert = inv;
+
+        // Apply to UI controls (they exist after initViews)
+        seekGamma.setProgress(gammaProgress);
+        seekThreshold.setProgress(threshold);
+        switchInvert.setChecked(inv);
+        valueGamma.setText(String.format(java.util.Locale.US, "%.2f", currentGamma));
+        valueThreshold.setText(String.valueOf(currentThreshold));
+
+        // Dither dropdown text is set in initControls after adapter is attached.
+    }
+
+    private void savePreferences() {
+        SharedPreferences sp = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        sp.edit()
+            .putInt(KEY_GAMMA, Math.round(currentGamma * 100f))
+            .putInt(KEY_THRESHOLD, currentThreshold)
+            .putInt(KEY_DITHER_MODE, currentDitherMode)
+            .putBoolean(KEY_INVERT, currentInvert)
+            .apply();
     }
 
     private void loadPairedDevices() {
@@ -385,6 +383,7 @@ public class ManualModeActivity extends AppCompatActivity {
             updateStatus("Missing permission to read devices");
             return;
         }
+
         List<String> names = new ArrayList<>();
         deviceMap.clear();
         for (BluetoothDevice d : bonded) {
@@ -395,23 +394,42 @@ public class ManualModeActivity extends AppCompatActivity {
                 deviceMap.put(label, d);
             }
         }
+
         if (names.isEmpty()) {
-            names.add("No paired " + TARGET_DEVICE_NAME + " devices");
             btnConnect.setEnabled(false);
+            devicesAdapter.clear();
+            devicesAdapter.add("No paired " + TARGET_DEVICE_NAME + " devices");
+            devicesAdapter.notifyDataSetChanged();
+            spinnerDevices.setText(devicesAdapter.getItem(0), false);
         } else {
             btnConnect.setEnabled(true);
+            devicesAdapter.clear();
+            devicesAdapter.addAll(names);
+            devicesAdapter.notifyDataSetChanged();
+            // Default to first device.
+            spinnerDevices.setText(devicesAdapter.getItem(0), false);
         }
-        ArrayAdapter<String> adapterSpinner = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, names);
-        adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerDevices.setAdapter(adapterSpinner);
+
+        // Update status
         updateStatus("Found " + deviceMap.size() + " " + TARGET_DEVICE_NAME + " device(s)");
+
+        // When user picks a device from dropdown.
+        spinnerDevices.setOnItemClickListener((parent, view, position, id) -> {
+            // No-op; selection is stored in the text view.
+        });
     }
 
     private void connectToSelectedDevice() {
-        Object sel = spinnerDevices.getSelectedItem();
-        if (sel == null) { Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show(); return; }
-        BluetoothDevice device = deviceMap.get(sel.toString());
-        if (device == null) { Toast.makeText(this, "Invalid device", Toast.LENGTH_SHORT).show(); return; }
+        String sel = spinnerDevices.getText() != null ? spinnerDevices.getText().toString() : null;
+        if (sel == null || sel.trim().isEmpty()) {
+            Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        BluetoothDevice device = deviceMap.get(sel);
+        if (device == null) {
+            Toast.makeText(this, "Invalid device", Toast.LENGTH_SHORT).show();
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
             singlePermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT);
             return;
@@ -670,5 +688,18 @@ public class ManualModeActivity extends AppCompatActivity {
     private void cancelScheduledReprocess() {
         reprocessHandler.removeCallbacks(reprocessRunnable);
     }
-}
 
+    private void setupListeners() {
+        btnConnect.setOnClickListener(v -> connectToSelectedDevice());
+        btnSelectImage.setOnClickListener(v -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_MEDIA_IMAGES)) {
+                singlePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
+            } else if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                singlePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
+            } else {
+                imagePickerLauncher.launch("image/*");
+            }
+        });
+        btnPrint.setOnClickListener(v -> sendCurrentImage());
+    }
+}
