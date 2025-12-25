@@ -134,6 +134,8 @@ public final class OpenAiClient {
             tool.put("model", "gpt-image-1-mini");
             tool.put("size", "1024x1536");
             tool.put("quality", "low");
+            tool.put("output_format", "jpeg");
+            tool.put("output_compression", 100);
             tools.put(tool);
             payload.put("tools", tools);
 
