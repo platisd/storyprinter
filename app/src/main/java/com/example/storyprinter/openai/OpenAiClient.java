@@ -125,7 +125,18 @@ public final class OpenAiClient {
         JSONObject payload = new JSONObject();
         try {
             payload.put("model", model);
-            payload.put("input", prompt);
+
+            JSONArray inputArray = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+            JSONArray contentArray = new JSONArray();
+            JSONObject inputText = new JSONObject();
+            inputText.put("type", "input_text");
+            inputText.put("text", prompt);
+            contentArray.put(inputText);
+            message.put("content", contentArray);
+            inputArray.put(message);
+            payload.put("input", inputArray);
 
             // Enable the image generation tool.
             JSONArray tools = new JSONArray();
