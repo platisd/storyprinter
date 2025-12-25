@@ -37,9 +37,11 @@ import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.core.widget.NestedScrollView;
 
 import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.story.StorySession;
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputLayout;
 
 import java.io.File;
@@ -104,6 +106,9 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private static final String TEMP_PRINT_DIR = "print_temp";
 
+    private NestedScrollView storyScroll;
+    private ExtendedFloatingActionButton fabBackToTop;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -125,6 +130,29 @@ public class StoryModeActivity extends AppCompatActivity {
         tilSeed = findViewById(R.id.tilSeed);
         etSeed = findViewById(R.id.etSeed);
         seedEndIconProgress = findViewById(R.id.seedEndIconProgress);
+
+        storyScroll = findViewById(R.id.storyScroll);
+        fabBackToTop = findViewById(R.id.fabBackToTop);
+
+        if (fabBackToTop != null && storyScroll != null) {
+            fabBackToTop.setOnClickListener(v -> storyScroll.smoothScrollTo(0, 0));
+
+            // Show the FAB only after the user has scrolled a bit.
+            storyScroll.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
+                @Override
+                public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
+                    boolean shouldShow = scrollY > dpToPx(200);
+                    if (shouldShow && fabBackToTop.getVisibility() != View.VISIBLE) {
+                        fabBackToTop.show();
+                    } else if (!shouldShow && fabBackToTop.getVisibility() == View.VISIBLE) {
+                        fabBackToTop.hide();
+                    }
+                }
+            });
+
+            // Start hidden.
+            fabBackToTop.hide();
+        }
 
         btnNext = findViewById(R.id.btnNext);
         btnClear = findViewById(R.id.btnClear);
