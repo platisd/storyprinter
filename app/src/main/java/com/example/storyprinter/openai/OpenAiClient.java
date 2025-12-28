@@ -113,13 +113,13 @@ public final class OpenAiClient {
     }
 
     /**
-     * Generates an image via the Responses API using the image_generation tool.
-     *
-     * Pass previousResponseId to keep a consistent multi-turn chain.
+     * Generates an image via the Responses API (image_generation tool), optionally conditioned on a single
+     * base64-encoded reference image (JPEG/PNG). The provided base64 should NOT include the data-url prefix.
      */
     public ImageResult generateImage(
             String model,
             String prompt,
+            String referenceImageBase64,
             String previousResponseId
     ) throws IOException {
         JSONObject payload = new JSONObject();
@@ -129,11 +129,25 @@ public final class OpenAiClient {
             JSONArray inputArray = new JSONArray();
             JSONObject message = new JSONObject();
             message.put("role", "user");
+
             JSONArray contentArray = new JSONArray();
+
             JSONObject inputText = new JSONObject();
             inputText.put("type", "input_text");
             inputText.put("text", prompt);
+
+            if (referenceImageBase64 != null && !referenceImageBase64.trim().isEmpty()) {
+                JSONObject inputImage = new JSONObject();
+                inputImage.put("type", "input_image");
+                // Default to jpeg data-url; the API accepts data URLs.
+                inputImage.put("image_url", "data:image/jpeg;base64," + referenceImageBase64.trim());
+                contentArray.put(inputImage);
+                // Append "Use reference image" to prompt for clarity.
+                inputText.put("text", prompt + " Generate the main subjects using the reference image as a style guide.");
+                Log.i("OpenAiClient", inputText.getString("text"));
+            }
             contentArray.put(inputText);
+
             message.put("content", contentArray);
             inputArray.put(message);
             payload.put("input", inputArray);
@@ -147,6 +161,7 @@ public final class OpenAiClient {
             tool.put("quality", "low");
             tool.put("output_format", "jpeg");
             tool.put("output_compression", 100);
+            tool.put("moderation", "low");
             tools.put(tool);
             payload.put("tools", tools);
 

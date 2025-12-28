@@ -11,4 +11,17 @@
     <string name="main_menu_manual_mode">Manual mode</string>
     <string name="main_menu_open_manual_mode">Open Manual mode</string>
     <string name="main_menu_manual_desc">Pick an image and fine-tune print settings.</string>
+
+    <!-- Story Mode -->
+    <string name="story_seed_hint">Seed prompt (e.g., A brave bunny in space)</string>
+    <string name="story_update_hint">Add a new instruction to steer the story (e.g., Introduce a robot friend)</string>
+    <string name="story_error_seed_required">Please enter a seed prompt</string>
+    <string name="story_error_update_required">Please enter an update instruction</string>
+
+    <string name="story_page_title">Page %1$d</string>
+
+    <string name="story_action_next">Next</string>
+    <string name="story_action_clear">Clear</string>
+    <string name="story_action_save_image">Save image</string>
+    <string name="story_action_print">Print</string>
 </resources>

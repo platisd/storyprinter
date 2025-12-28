@@ -3,7 +3,6 @@ package com.example.storyprinter.story;
 import android.graphics.Bitmap;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,14 +39,28 @@ public final class StorySession {
     /** The seed prompt last used to start the story (optional). */
     private String seedPrompt;
 
+    /** Optional user-provided reference image (base64, without data-url prefix). */
+    private String referenceImageBase64;
+
+    /** Small thumbnail for UI (kept in-memory only). */
+    private Bitmap referenceImageThumbnail;
+
     private StorySession() {
     }
 
     public synchronized void clear() {
+        clear(true);
+    }
+
+    public synchronized void clear(boolean removeReferenceImage) {
         pages.clear();
         previousTextResponseId = null;
         previousImageResponseId = null;
         seedPrompt = null;
+        if (removeReferenceImage) {
+            referenceImageBase64 = null;
+            referenceImageThumbnail = null;
+        }
     }
 
     public synchronized List<Page> snapshotPages() {
@@ -91,5 +104,22 @@ public final class StorySession {
     public synchronized void setSeedPrompt(String seedPrompt) {
         this.seedPrompt = seedPrompt;
     }
-}
 
+    public synchronized String getReferenceImageBase64() {
+        return referenceImageBase64;
+    }
+
+    public synchronized Bitmap getReferenceImageThumbnail() {
+        return referenceImageThumbnail;
+    }
+
+    public synchronized void setReferenceImage(String base64, Bitmap thumbnail) {
+        this.referenceImageBase64 = base64;
+        this.referenceImageThumbnail = thumbnail;
+    }
+
+    public synchronized void clearReferenceImage() {
+        this.referenceImageBase64 = null;
+        this.referenceImageThumbnail = null;
+    }
+}

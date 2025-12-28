@@ -50,7 +50,7 @@ android {
 }
 
 dependencies {
-
+// implementation 'com.google.android.material:material
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)

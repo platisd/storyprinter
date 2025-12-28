@@ -120,6 +120,12 @@ public class StoryModeActivity extends AppCompatActivity {
     private boolean bottomSwipeArmed = false;
     private float bottomSwipeStartY = 0f;
 
+    private View cardReferenceImage;
+    private ImageView ivReferenceThumb;
+    private View btnRemoveReference;
+
+    private ActivityResultLauncher<String> pickReferenceImageLauncher;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -141,6 +147,10 @@ public class StoryModeActivity extends AppCompatActivity {
         tilSeed = findViewById(R.id.tilSeed);
         etSeed = findViewById(R.id.etSeed);
         seedEndIconProgress = findViewById(R.id.seedEndIconProgress);
+
+        cardReferenceImage = findViewById(R.id.cardReferenceImage);
+        ivReferenceThumb = findViewById(R.id.ivReferenceThumb);
+        btnRemoveReference = findViewById(R.id.btnRemoveReference);
 
         storyScroll = findViewById(R.id.storyScroll);
         fabBackToTop = findViewById(R.id.fabBackToTop);
@@ -263,11 +273,55 @@ public class StoryModeActivity extends AppCompatActivity {
             });
         }
 
+        // Image picker for optional reference image.
+        pickReferenceImageLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri == null) return;
+                    io.execute(() -> {
+                        try {
+                            ReferenceImage ref = loadReferenceImageBase64(uri);
+                            session.setReferenceImage(ref.base64Jpeg, ref.thumbnail);
+                            main.post(() -> renderReferenceImageFromSession());
+                        } catch (Exception e) {
+                            String msg = e.getMessage() != null ? e.getMessage() : e.toString();
+                            main.post(() -> Toast.makeText(this, "Couldn't load image: " + msg, Toast.LENGTH_LONG).show());
+                        }
+                    });
+                }
+        );
+
+        if (tilSeed != null) {
+            tilSeed.setStartIconOnClickListener(v -> {
+                if (isLoading) return;
+                if (pickReferenceImageLauncher != null) {
+                    pickReferenceImageLauncher.launch("image/*");
+                }
+            });
+        }
+
+        if (cardReferenceImage != null && btnRemoveReference != null) {
+            // Tap the thumbnail card to toggle the X button.
+            cardReferenceImage.setOnClickListener(v -> {
+                if (btnRemoveReference.getVisibility() == View.VISIBLE) {
+                    btnRemoveReference.setVisibility(View.GONE);
+                } else {
+                    btnRemoveReference.setVisibility(View.VISIBLE);
+                }
+            });
+
+            btnRemoveReference.setOnClickListener(v -> {
+                session.clearReferenceImage();
+                renderReferenceImageFromSession();
+            });
+        }
+
         // Restore UI from the in-memory session so navigating away/back doesn't lose pages.
         seedPrompt = session.getSeedPrompt();
         if (seedPrompt != null && !seedPrompt.trim().isEmpty()) {
             etSeed.setText(seedPrompt);
         }
+        renderReferenceImageFromSession();
         renderPagesFromSession();
         updateButtonsForIdleState();
         setComposeLoading(false);
@@ -343,16 +397,19 @@ public class StoryModeActivity extends AppCompatActivity {
             etSeed.setError(null);
         }
 
+        // Clear reference image UI.
+        renderReferenceImageFromSession();
+
         pagesContainer.removeAllViews();
         btnNext.setEnabled(false);
         setComposeLoading(false);
 
         // Reset the input hint back to a seed.
         if (tilSeed != null) {
-            tilSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
+            tilSeed.setHint(getString(R.string.story_seed_hint));
             tilSeed.setEndIconDrawable(R.drawable.ic_arrow_forward_24);
         } else if (etSeed != null) {
-            etSeed.setHint("Seed prompt (e.g., 'A brave bunny in space')");
+            etSeed.setHint(getString(R.string.story_seed_hint));
         }
     }
 
@@ -374,28 +431,24 @@ public class StoryModeActivity extends AppCompatActivity {
         btnNext.setEnabled(hasPages);
 
         if (tilSeed != null) {
-            tilSeed.setHint(hasPages
-                    ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
-                    : "Seed prompt (e.g., 'A brave bunny in space')");
+            tilSeed.setHint(getString(hasPages ? R.string.story_update_hint : R.string.story_seed_hint));
 
             // Swap end icon: arrow before story starts, slick update icon after.
             tilSeed.setEndIconDrawable(hasPages ? R.drawable.ic_update_24 : R.drawable.ic_arrow_forward_24);
         } else if (etSeed != null) {
-            etSeed.setHint(hasPages
-                    ? "Add a new instruction to steer the story (e.g., 'Introduce a robot friend')"
-                    : "Seed prompt (e.g., 'A brave bunny in space')");
+            etSeed.setHint(getString(hasPages ? R.string.story_update_hint : R.string.story_seed_hint));
         }
     }
 
     private void startStory() {
         String seed = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
         if (TextUtils.isEmpty(seed)) {
-            etSeed.setError("Please enter a seed prompt");
+            etSeed.setError(getString(R.string.story_error_seed_required));
             return;
         }
 
         seedPrompt = seed;
-        session.clear();
+        session.clear(false);
         session.setSeedPrompt(seed);
 
         // Starting a new story should reset pages (including images).
@@ -414,7 +467,7 @@ public class StoryModeActivity extends AppCompatActivity {
     private void updateStory() {
         String steer = etSeed.getText() != null ? etSeed.getText().toString().trim() : "";
         if (TextUtils.isEmpty(steer)) {
-            etSeed.setError("Please enter an update instruction");
+            etSeed.setError(getString(R.string.story_error_update_required));
             return;
         }
 
@@ -435,6 +488,9 @@ public class StoryModeActivity extends AppCompatActivity {
 
             final LinearLayout[] pageBlockHolder = new LinearLayout[1];
             final StorySession.Page[] sessionPageHolder = new StorySession.Page[1];
+
+            final boolean isSeedOrUpdate = (session.getPreviousTextResponseId() == null)
+                    || (steerInstructionOrNull != null && !steerInstructionOrNull.trim().isEmpty());
 
             main.post(() -> {
                 LinearLayout pageBlock = createPageBlock(pageNumberToRender);
@@ -490,10 +546,15 @@ public class StoryModeActivity extends AppCompatActivity {
                     }
                 });
 
-                // Image generation: chain only to previous IMAGE response id.
+                // Image generation:
+                // - chain only to previous IMAGE response id
+                // - include user-provided reference image ONLY when the user provided a prompt (seed/update)
+                String referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
+
                 OpenAiClient.ImageResult imageResult = openAiImages.generateImage(
                         IMAGE_MODEL,
                         assistant,
+                        referenceBase64,
                         session.getPreviousImageResponseId()
                 );
 
@@ -543,6 +604,79 @@ public class StoryModeActivity extends AppCompatActivity {
         });
     }
 
+    private void renderReferenceImageFromSession() {
+        if (cardReferenceImage == null || ivReferenceThumb == null || btnRemoveReference == null) return;
+
+        Bitmap thumb = session.getReferenceImageThumbnail();
+        boolean has = (thumb != null) && (session.getReferenceImageBase64() != null) && (!session.getReferenceImageBase64().trim().isEmpty());
+
+        if (!has) {
+            cardReferenceImage.setVisibility(View.GONE);
+            ivReferenceThumb.setImageDrawable(null);
+            btnRemoveReference.setVisibility(View.GONE);
+            return;
+        }
+
+        cardReferenceImage.setVisibility(View.VISIBLE);
+        ivReferenceThumb.setImageBitmap(thumb);
+        // Hide X by default; user taps thumbnail to reveal.
+        btnRemoveReference.setVisibility(View.GONE);
+    }
+
+    private static final class ReferenceImage {
+        final String base64Jpeg;
+        final Bitmap thumbnail;
+
+        ReferenceImage(String base64Jpeg, Bitmap thumbnail) {
+            this.base64Jpeg = base64Jpeg;
+            this.thumbnail = thumbnail;
+        }
+    }
+
+    private ReferenceImage loadReferenceImageBase64(Uri uri) throws IOException {
+        ContentResolver resolver = getContentResolver();
+
+        // Decode with sampling to avoid large allocations.
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inJustDecodeBounds = true;
+        try (java.io.InputStream is = resolver.openInputStream(uri)) {
+            if (is == null) throw new IOException("Couldn't open image");
+            BitmapFactory.decodeStream(is, null, opts);
+        }
+
+        int srcW = opts.outWidth;
+        int srcH = opts.outHeight;
+        if (srcW <= 0 || srcH <= 0) {
+            throw new IOException("Unsupported image");
+        }
+
+        // Target: keep it reasonable; reference image is guidance, not full-res.
+        int maxDim = 1024;
+        int sample = 1;
+        while ((srcW / sample) > maxDim || (srcH / sample) > maxDim) {
+            sample *= 2;
+        }
+
+        BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+        decodeOpts.inSampleSize = sample;
+        Bitmap decoded;
+        try (java.io.InputStream is2 = resolver.openInputStream(uri)) {
+            if (is2 == null) throw new IOException("Couldn't open image");
+            decoded = BitmapFactory.decodeStream(is2, null, decodeOpts);
+        }
+        if (decoded == null) throw new IOException("Couldn't decode image");
+
+        // Encode to JPEG for the data-url (we always send data:image/jpeg;base64,...)
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        decoded.compress(Bitmap.CompressFormat.JPEG, 90, baos);
+        String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+
+        // Thumbnail for UI.
+        Bitmap thumb = Bitmap.createScaledBitmap(decoded, 120, (int) (120f * decoded.getHeight() / Math.max(1, decoded.getWidth())), true);
+
+        return new ReferenceImage(base64, thumb);
+    }
+
     private LinearLayout createPageBlock(int pageNumber) {
         // Outer container so we can keep current method signature (LinearLayout) while using a CardView inside.
         LinearLayout outer = new LinearLayout(this);
@@ -586,7 +720,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
-        title.setText("Page " + pageNumber);
+        title.setText(getString(R.string.story_page_title, pageNumber));
         title.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
         title.setTag("pageTitle");
 
@@ -619,8 +753,7 @@ public class StoryModeActivity extends AppCompatActivity {
         error.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
         error.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 this,
-                // Material 1.10 doesn't expose R.attr.colorError; use a compatible error-ish color.
-                com.google.android.material.R.attr.colorErrorContainer,
+                android.R.attr.colorError,
                 Color.RED
         ));
         error.setTag("pageError");
@@ -690,14 +823,14 @@ public class StoryModeActivity extends AppCompatActivity {
         // Use Material buttons for a consistent M3 look.
         com.google.android.material.button.MaterialButton btnSave = new com.google.android.material.button.MaterialButton(this, null,
                 com.google.android.material.R.attr.materialButtonOutlinedStyle);
-        btnSave.setText("Save image");
+        btnSave.setText(R.string.story_action_save_image);
         btnSave.setTag("btnSaveImage");
         LinearLayout.LayoutParams saveLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         btnSave.setLayoutParams(saveLp);
 
         com.google.android.material.button.MaterialButton btnPrint = new com.google.android.material.button.MaterialButton(this, null,
                 com.google.android.material.R.attr.materialButtonStyle);
-        btnPrint.setText("Print");
+        btnPrint.setText(R.string.story_action_print);
         btnPrint.setEnabled(true);
         btnPrint.setTag("btnPrintImage");
         LinearLayout.LayoutParams printLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -770,15 +903,7 @@ public class StoryModeActivity extends AppCompatActivity {
     }
 
     private void requestSaveImageToPhone(Bitmap bitmap, int pageNumber) {
-        // On Android 10+ (API 29+), saving to MediaStore doesn't require storage permissions.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                pendingImageAction = new PendingImageAction(bitmap, pageNumber);
-                writeStoragePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-                return;
-            }
-        }
+        // minSdk is 29, so MediaStore saving doesn't require legacy WRITE_EXTERNAL_STORAGE permission.
         saveBitmapToGallery(bitmap, pageNumber);
     }
 
@@ -796,10 +921,8 @@ public class StoryModeActivity extends AppCompatActivity {
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
                 values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/StoryPrinter");
-                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
-                }
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/StoryPrinter");
+                values.put(MediaStore.Images.Media.IS_PENDING, 1);
 
                 uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
                 if (uri == null) throw new IOException("Failed to create MediaStore record");
@@ -810,19 +933,16 @@ public class StoryModeActivity extends AppCompatActivity {
                 boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, os);
                 if (!ok) throw new IOException("Failed to encode PNG");
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ContentValues done = new ContentValues();
-                    done.put(MediaStore.Images.Media.IS_PENDING, 0);
-                    resolver.update(uri, done, null, null);
-                }
+                ContentValues done = new ContentValues();
+                done.put(MediaStore.Images.Media.IS_PENDING, 0);
+                resolver.update(uri, done, null, null);
 
                 Uri finalUri = uri;
                 main.post(() -> Toast.makeText(this, "Saved to Photos: " + finalUri, Toast.LENGTH_SHORT).show());
             } catch (Exception e) {
-                Uri toDelete = uri;
-                if (toDelete != null) {
+                if (uri != null) {
                     try {
-                        getContentResolver().delete(toDelete, null, null);
+                        getContentResolver().delete(uri, null, null);
                     } catch (Exception ignored) {
                     }
                 }
