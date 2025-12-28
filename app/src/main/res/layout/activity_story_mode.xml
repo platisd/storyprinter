@@ -146,4 +146,20 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <com.google.android.material.chip.Chip
+        android:id="@+id/chipSwipeNext"
+        style="@style/Widget.Material3.Chip.Assist"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
+        android:visibility="gone"
+        android:text="Swipe up for next"
+        app:chipIcon="@drawable/ic_arrow_upward_24"
+        app:chipIconTint="?attr/colorOnSurface"
+        app:chipBackgroundColor="?attr/colorSurfaceContainerHigh"
+        android:textColor="?attr/colorOnSurface"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -17,6 +17,7 @@ import android.provider.MediaStore;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -41,6 +42,7 @@ import androidx.core.widget.NestedScrollView;
 
 import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.story.StorySession;
+import com.google.android.material.chip.Chip;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -110,6 +112,14 @@ public class StoryModeActivity extends AppCompatActivity {
     private ExtendedFloatingActionButton fabBackToTop;
     private ExtendedFloatingActionButton fabGoToBottom;
 
+    private Chip chipSwipeNext;
+
+
+    // Bottom swipe-to-next (press + drag) state
+    private boolean bottomSwipeTracking = false;
+    private boolean bottomSwipeArmed = false;
+    private float bottomSwipeStartY = 0f;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -135,6 +145,12 @@ public class StoryModeActivity extends AppCompatActivity {
         storyScroll = findViewById(R.id.storyScroll);
         fabBackToTop = findViewById(R.id.fabBackToTop);
         fabGoToBottom = findViewById(R.id.fabGoToBottom);
+
+        chipSwipeNext = findViewById(R.id.chipSwipeNext);
+        if (chipSwipeNext != null) {
+            chipSwipeNext.setVisibility(View.GONE);
+            chipSwipeNext.setEnabled(false);
+        }
 
         if (storyScroll != null) {
             if (fabBackToTop != null) {
@@ -169,6 +185,22 @@ public class StoryModeActivity extends AppCompatActivity {
 
             // Initialize state after the first layout pass (and whenever layout changes).
             storyScroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateScrollFabEnabledState);
+
+            // Replace fling-only trigger with a press-and-drag affordance:
+            // - only when at bottom
+            // - show a snackbar while finger is down to indicate the pending action
+            // - allow cancel by dragging back down
+            storyScroll.setOnTouchListener((v, event) -> {
+                handleBottomSwipeToNextGesture(event);
+
+                if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                    // Accessibility / lint: ensure click is properly reported.
+                    v.performClick();
+                }
+
+                // Never consume; NestedScrollView must keep handling scrolling.
+                return false;
+            });
         }
 
         btnNext = findViewById(R.id.btnNext);
@@ -975,5 +1007,147 @@ public class StoryModeActivity extends AppCompatActivity {
 
         // Keep full alpha; the tint handles disabled emphasis.
         fab.setAlpha(1f);
+    }
+
+    private boolean isAtBottom() {
+        if (storyScroll == null) return false;
+        View child = storyScroll.getChildAt(0);
+        if (child == null) return true;
+
+        // Small tolerance because scroll positions can be off by a couple px due to rounding/insets.
+        final int tol = dpToPx(2);
+        int range = Math.max(0, child.getHeight() - storyScroll.getHeight());
+        return storyScroll.getScrollY() >= (range - tol);
+    }
+
+    private void handleBottomSwipeToNextGesture(MotionEvent event) {
+        if (event == null) return;
+        if (storyScroll == null) return;
+
+        // Only relevant when a story exists and Next is available.
+        if (btnNext == null || !btnNext.isEnabled()) {
+            resetBottomSwipeToNext();
+            return;
+        }
+
+        if (isLoading) {
+            resetBottomSwipeToNext();
+            return;
+        }
+
+        final int armDistancePx = dpToPx(56);
+        final int cancelHysteresisPx = dpToPx(24);
+
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN: {
+                // Start tracking only if we're currently at the bottom.
+                if (!isAtBottom()) {
+                    resetBottomSwipeToNext();
+                    return;
+                }
+                bottomSwipeTracking = true;
+                bottomSwipeArmed = false;
+                bottomSwipeStartY = event.getY();
+                updateSwipeNextIndicator(false, true);
+                break;
+            }
+
+            case MotionEvent.ACTION_MOVE: {
+                if (!bottomSwipeTracking) return;
+
+                // If user moved away from the bottom due to scroll bounce/content changes, stop tracking.
+                if (!isAtBottom()) {
+                    resetBottomSwipeToNext();
+                    return;
+                }
+
+                float dy = event.getY() - bottomSwipeStartY;
+                float upDistance = -dy;
+
+                if (!bottomSwipeArmed) {
+                    if (upDistance >= armDistancePx) {
+                        bottomSwipeArmed = true;
+                        updateSwipeNextIndicator(true, true);
+                    }
+                } else {
+                    // Allow cancel by moving back down without lifting.
+                    if (upDistance <= (armDistancePx - cancelHysteresisPx)) {
+                        bottomSwipeArmed = false;
+                        updateSwipeNextIndicator(false, true);
+                    }
+                }
+                break;
+            }
+
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL: {
+                boolean shouldTrigger = bottomSwipeTracking && bottomSwipeArmed && !isLoading
+                        && btnNext != null && btnNext.isEnabled() && isAtBottom();
+
+                resetBottomSwipeToNext();
+
+                if (shouldTrigger) {
+                    nextPage();
+                }
+                break;
+            }
+        }
+    }
+
+    private void updateSwipeNextIndicator(boolean armed, boolean show) {
+        if (chipSwipeNext == null) return;
+
+        // Text is intentionally short and unobtrusive.
+        chipSwipeNext.setText(armed ? "Release for next" : "Swipe up for next");
+
+        // Extra clean: only show an icon when the action is armed.
+        if (armed) {
+            chipSwipeNext.setChipIcon(getDrawable(R.drawable.ic_auto_awesome_24));
+            chipSwipeNext.setChipIconVisible(true);
+        } else {
+            chipSwipeNext.setChipIcon(null);
+            chipSwipeNext.setChipIconVisible(false);
+        }
+
+        if (!show) {
+            if (chipSwipeNext.getVisibility() == View.VISIBLE) {
+                chipSwipeNext.animate()
+                        .alpha(0f)
+                        .translationY(dpToPx(12))
+                        .setDuration(120)
+                        .withEndAction(() -> {
+                            chipSwipeNext.setVisibility(View.GONE);
+                            chipSwipeNext.setAlpha(1f);
+                            chipSwipeNext.setTranslationY(0f);
+                        })
+                        .start();
+            }
+            return;
+        }
+
+        if (chipSwipeNext.getVisibility() != View.VISIBLE) {
+            chipSwipeNext.setAlpha(0f);
+            chipSwipeNext.setTranslationY(dpToPx(12));
+            chipSwipeNext.setVisibility(View.VISIBLE);
+            chipSwipeNext.animate()
+                    .alpha(1f)
+                    .translationY(0f)
+                    .setDuration(150)
+                    .start();
+        }
+    }
+
+    private void resetBottomSwipeToNext() {
+        bottomSwipeTracking = false;
+        bottomSwipeArmed = false;
+        bottomSwipeStartY = 0f;
+
+        updateSwipeNextIndicator(false, false);
+    }
+
+    private void clearBottomSwipeIndicator() {
+        if (chipSwipeNext != null) {
+            chipSwipeNext.setVisibility(View.GONE);
+        }
     }
 }
