@@ -126,8 +126,21 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp"
-        android:visibility="gone"
+        android:visibility="visible"
         app:icon="@drawable/ic_arrow_upward_24"
+        app:iconTint="?attr/colorOnPrimaryContainer"
+        app:backgroundTint="?attr/colorPrimaryContainer"
+        app:layout_constraintBottom_toTopOf="@id/fabGoToBottom"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fabGoToBottom"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:visibility="visible"
+        app:icon="@drawable/ic_arrow_downward_24"
         app:iconTint="?attr/colorOnPrimaryContainer"
         app:backgroundTint="?attr/colorPrimaryContainer"
         app:layout_constraintBottom_toBottomOf="parent"

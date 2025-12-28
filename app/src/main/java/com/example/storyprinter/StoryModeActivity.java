@@ -108,6 +108,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private NestedScrollView storyScroll;
     private ExtendedFloatingActionButton fabBackToTop;
+    private ExtendedFloatingActionButton fabGoToBottom;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -133,25 +134,41 @@ public class StoryModeActivity extends AppCompatActivity {
 
         storyScroll = findViewById(R.id.storyScroll);
         fabBackToTop = findViewById(R.id.fabBackToTop);
+        fabGoToBottom = findViewById(R.id.fabGoToBottom);
 
-        if (fabBackToTop != null && storyScroll != null) {
-            fabBackToTop.setOnClickListener(v -> storyScroll.smoothScrollTo(0, 0));
+        if (storyScroll != null) {
+            if (fabBackToTop != null) {
+                fabBackToTop.setOnClickListener(v -> {
+                    storyScroll.smoothScrollTo(0, 0);
+                    // Smooth scroll is async; refresh state right after and after the next layout.
+                    updateScrollFabEnabledState();
+                    storyScroll.post(this::updateScrollFabEnabledState);
+                });
+                fabBackToTop.setVisibility(View.VISIBLE);
+            }
 
-            // Show the FAB only after the user has scrolled a bit.
+            if (fabGoToBottom != null) {
+                fabGoToBottom.setOnClickListener(v -> {
+                    View child = storyScroll.getChildAt(0);
+                    if (child != null) {
+                        storyScroll.smoothScrollTo(0, child.getBottom());
+                    }
+                    updateScrollFabEnabledState();
+                    storyScroll.post(this::updateScrollFabEnabledState);
+                });
+                fabGoToBottom.setVisibility(View.VISIBLE);
+            }
+
+            // Enabled/disabled state is driven by scroll position.
             storyScroll.setOnScrollChangeListener(new NestedScrollView.OnScrollChangeListener() {
                 @Override
                 public void onScrollChange(NestedScrollView v, int scrollX, int scrollY, int oldScrollX, int oldScrollY) {
-                    boolean shouldShow = scrollY > dpToPx(200);
-                    if (shouldShow && fabBackToTop.getVisibility() != View.VISIBLE) {
-                        fabBackToTop.show();
-                    } else if (!shouldShow && fabBackToTop.getVisibility() == View.VISIBLE) {
-                        fabBackToTop.hide();
-                    }
+                    updateScrollFabEnabledState();
                 }
             });
 
-            // Start hidden.
-            fabBackToTop.hide();
+            // Initialize state after the first layout pass (and whenever layout changes).
+            storyScroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateScrollFabEnabledState);
         }
 
         btnNext = findViewById(R.id.btnNext);
@@ -470,6 +487,11 @@ public class StoryModeActivity extends AppCompatActivity {
 
                     setComposeLoading(false);
                     updateButtonsForIdleState();
+
+                    // Content height changes after adding a page; refresh FAB enabled/disabled state.
+                    if (storyScroll != null) {
+                        storyScroll.post(this::updateScrollFabEnabledState);
+                    }
                 });
             } catch (IOException e) {
                 main.post(() -> {
@@ -480,6 +502,10 @@ public class StoryModeActivity extends AppCompatActivity {
                     }
                     setComposeLoading(false);
                     updateButtonsForIdleState();
+
+                    if (storyScroll != null) {
+                        storyScroll.post(this::updateScrollFabEnabledState);
+                    }
                 });
             }
         });
@@ -561,7 +587,8 @@ public class StoryModeActivity extends AppCompatActivity {
         error.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
         error.setTextColor(com.google.android.material.color.MaterialColors.getColor(
                 this,
-                com.google.android.material.R.attr.colorError,
+                // Material 1.10 doesn't expose R.attr.colorError; use a compatible error-ish color.
+                com.google.android.material.R.attr.colorErrorContainer,
                 Color.RED
         ));
         error.setTag("pageError");
@@ -877,5 +904,76 @@ public class StoryModeActivity extends AppCompatActivity {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private void updateScrollFabEnabledState() {
+        if (storyScroll == null) return;
+
+        // Small tolerance because scroll positions can be off by a couple px due to rounding/insets.
+        final int tol = dpToPx(2);
+
+        int scrollY = storyScroll.getScrollY();
+
+        View child = storyScroll.getChildAt(0);
+        int range = 0;
+        if (child != null) {
+            range = Math.max(0, child.getHeight() - storyScroll.getHeight());
+        }
+
+        boolean atTop = scrollY <= tol;
+        boolean atBottom = scrollY >= (range - tol);
+
+        setFabEnabled(fabBackToTop, !atTop);
+        setFabEnabled(fabGoToBottom, !atBottom);
+    }
+
+    private static void setFabEnabled(ExtendedFloatingActionButton fab, boolean enabled) {
+        if (fab == null) return;
+
+        fab.setEnabled(enabled);
+        fab.setClickable(enabled);
+
+        // Material 3: disabled state uses reduced emphasis (commonly 38% alpha).
+        // Instead of dimming the entire view (which can look odd), we apply the alpha
+        // to the icon tint and background tint so it reads as a real disabled color.
+        final float disabledAlpha = 0.38f;
+
+        int bg = com.google.android.material.color.MaterialColors.getColor(
+                fab,
+                com.google.android.material.R.attr.colorPrimaryContainer
+        );
+        int fg = com.google.android.material.color.MaterialColors.getColor(
+                fab,
+                com.google.android.material.R.attr.colorOnPrimaryContainer
+        );
+
+        int bgDisabled = com.google.android.material.color.MaterialColors.compositeARGBWithAlpha(
+                bg,
+                Math.round(255 * disabledAlpha)
+        );
+        int fgDisabled = com.google.android.material.color.MaterialColors.compositeARGBWithAlpha(
+                fg,
+                Math.round(255 * disabledAlpha)
+        );
+
+        int[][] states = new int[][]{
+                new int[]{android.R.attr.state_enabled},
+                new int[]{-android.R.attr.state_enabled}
+        };
+
+        android.content.res.ColorStateList bgTint = new android.content.res.ColorStateList(
+                states,
+                new int[]{bg, bgDisabled}
+        );
+        android.content.res.ColorStateList iconTint = new android.content.res.ColorStateList(
+                states,
+                new int[]{fg, fgDisabled}
+        );
+
+        fab.setBackgroundTintList(bgTint);
+        fab.setIconTint(iconTint);
+
+        // Keep full alpha; the tint handles disabled emphasis.
+        fab.setAlpha(1f);
     }
 }
