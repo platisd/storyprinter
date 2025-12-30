@@ -773,17 +773,19 @@ public class StoryModeActivity extends AppCompatActivity {
         // Image area: FrameLayout so we can overlay actions on top of the image.
         android.widget.FrameLayout imageArea = new android.widget.FrameLayout(this);
         LinearLayout.LayoutParams areaLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
         );
         areaLp.topMargin = dpToPx(12);
+        areaLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
         imageArea.setLayoutParams(areaLp);
         imageArea.setTag("imageArea");
 
         ImageView image = new ImageView(this);
         image.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.CENTER
         ));
         image.setAdjustViewBounds(true);
         image.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -794,7 +796,8 @@ public class StoryModeActivity extends AppCompatActivity {
         android.widget.FrameLayout overlay = new android.widget.FrameLayout(this);
         overlay.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.Gravity.CENTER
         ));
         overlay.setVisibility(View.GONE);
         overlay.setTag("imageOverlay");
@@ -803,7 +806,8 @@ public class StoryModeActivity extends AppCompatActivity {
         View scrim = new View(this);
         scrim.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.Gravity.CENTER
         ));
         scrim.setBackgroundColor(Color.parseColor("#80000000"));
         scrim.setTag("overlayScrim");
@@ -1263,11 +1267,5 @@ public class StoryModeActivity extends AppCompatActivity {
         bottomSwipeStartY = 0f;
 
         updateSwipeNextIndicator(false, false);
-    }
-
-    private void clearBottomSwipeIndicator() {
-        if (chipSwipeNext != null) {
-            chipSwipeNext.setVisibility(View.GONE);
-        }
     }
 }

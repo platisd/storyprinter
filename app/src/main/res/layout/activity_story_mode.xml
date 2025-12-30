@@ -79,7 +79,7 @@
             <!-- Reference image preview (hidden until the user picks an image) -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardReferenceImage"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:visibility="gone"
@@ -88,7 +88,7 @@
                 app:strokeColor="?attr/colorOutlineVariant">
 
                 <FrameLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:padding="12dp">
 
