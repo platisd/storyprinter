@@ -124,6 +124,12 @@ public class StoryModeActivity extends AppCompatActivity {
     private ImageView ivReferenceThumb;
     private View btnRemoveReference;
 
+    private final Runnable hideReferenceRemoveRunnable = () -> {
+        if (btnRemoveReference != null) {
+            btnRemoveReference.setVisibility(View.GONE);
+        }
+    };
+
     private ActivityResultLauncher<String> pickReferenceImageLauncher;
 
     @Override
@@ -301,16 +307,22 @@ public class StoryModeActivity extends AppCompatActivity {
         }
 
         if (cardReferenceImage != null && btnRemoveReference != null) {
-            // Tap the thumbnail card to toggle the X button.
+            // Single tap toggles the remove icon (X) on/off.
             cardReferenceImage.setOnClickListener(v -> {
-                if (btnRemoveReference.getVisibility() == View.VISIBLE) {
+                boolean isVisible = btnRemoveReference.getVisibility() == View.VISIBLE;
+                if (isVisible) {
+                    main.removeCallbacks(hideReferenceRemoveRunnable);
                     btnRemoveReference.setVisibility(View.GONE);
                 } else {
                     btnRemoveReference.setVisibility(View.VISIBLE);
+                    // Auto-hide after a moment to keep UI calm if the user forgets.
+                    main.removeCallbacks(hideReferenceRemoveRunnable);
+                    main.postDelayed(hideReferenceRemoveRunnable, 10000L);
                 }
             });
 
             btnRemoveReference.setOnClickListener(v -> {
+                main.removeCallbacks(hideReferenceRemoveRunnable);
                 session.clearReferenceImage();
                 renderReferenceImageFromSession();
             });
@@ -607,6 +619,9 @@ public class StoryModeActivity extends AppCompatActivity {
     private void renderReferenceImageFromSession() {
         if (cardReferenceImage == null || ivReferenceThumb == null || btnRemoveReference == null) return;
 
+        // Keep the remove icon hidden by default.
+        main.removeCallbacks(hideReferenceRemoveRunnable);
+
         Bitmap thumb = session.getReferenceImageThumbnail();
         boolean has = (thumb != null) && (session.getReferenceImageBase64() != null) && (!session.getReferenceImageBase64().trim().isEmpty());
 
@@ -619,7 +634,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
         cardReferenceImage.setVisibility(View.VISIBLE);
         ivReferenceThumb.setImageBitmap(thumb);
-        // Hide X by default; user taps thumbnail to reveal.
+        // Hide X by default; user taps to toggle.
         btnRemoveReference.setVisibility(View.GONE);
     }
 
