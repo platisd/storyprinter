@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.ContentResolver;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -15,16 +16,12 @@ import android.os.Bundle;
 import android.os.Looper;
 import android.provider.OpenableColumns;
 import android.util.Log;
-import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.SeekBar;
-import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.content.SharedPreferences;
 import android.annotation.SuppressLint;
 
 import androidx.activity.EdgeToEdge;
@@ -116,6 +113,10 @@ public class ManualModeActivity extends AppCompatActivity {
     private final android.os.Handler reprocessHandler = new android.os.Handler(Looper.getMainLooper());
     private final Runnable reprocessRunnable = this::processCurrentImageAsync; // will check for null image inside method
     private int processingGeneration = 0; // to discard stale results
+
+    // Prevent accidental double-taps on Send.
+    private static final long SEND_DEBOUNCE_MS = 5_000L;
+    private long sendDisabledUntilUptimeMs = 0L;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -451,9 +452,7 @@ public class ManualModeActivity extends AppCompatActivity {
 
                     // If we already have an image (e.g. coming from Story mode), allow printing right away.
                     // We rely on the already-processed bitmap if available; otherwise kick off processing now.
-                    if (processedBitmap != null) {
-                        // ...handled by refreshSendAvailability()
-                    } else if (originalBitmap != null) {
+                    if (processedBitmap == null && originalBitmap != null) {
                         processCurrentImageAsync();
                     }
                 } else {
@@ -716,14 +715,33 @@ public class ManualModeActivity extends AppCompatActivity {
                 imagePickerLauncher.launch("image/*");
             }
         });
-        btnPrint.setOnClickListener(v -> sendCurrentImage());
+
+        btnPrint.setOnClickListener(v -> {
+            // Debounce by disabling the button for a fixed time window.
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now < sendDisabledUntilUptimeMs) return;
+
+            // Start debounce window immediately so the UI becomes disabled.
+            sendDisabledUntilUptimeMs = now + SEND_DEBOUNCE_MS;
+            refreshSendAvailability();
+
+            // Re-evaluate after the debounce window (only re-enables if still eligible).
+            btnPrint.removeCallbacks(reEnableSendAfterDebounce);
+            btnPrint.postDelayed(reEnableSendAfterDebounce, SEND_DEBOUNCE_MS);
+
+            sendCurrentImage();
+        });
     }
+
+    private final Runnable reEnableSendAfterDebounce = this::refreshSendAvailability;
 
     private void refreshSendAvailability() {
         boolean hasImage = processedBitmap != null;
         boolean isConnected = (connectionManager != null && connectionManager.isConnected());
+        boolean debounceActive = android.os.SystemClock.uptimeMillis() < sendDisabledUntilUptimeMs;
+
         if (btnPrint != null) {
-            btnPrint.setEnabled(hasImage && isConnected);
+            btnPrint.setEnabled(hasImage && isConnected && !debounceActive);
         }
     }
 }
