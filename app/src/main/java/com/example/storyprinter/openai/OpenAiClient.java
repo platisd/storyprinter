@@ -54,20 +54,49 @@ public final class OpenAiClient {
 
     /**
      * Calls the Responses API and returns both `response_id` and assistant output text.
-     *
      * For multi-turn conversations, pass the previous response id (or null for the first turn).
+     * The provided base64 should NOT include the data-url prefix.
      */
     public ResponseResult createResponse(
             String model,
             double temperature,
             String input,
+            String referenceImageBase64,
             String previousResponseId
     ) throws IOException {
         JSONObject payload = new JSONObject();
         try {
             payload.put("model", model);
             payload.put("temperature", temperature);
-            payload.put("input", input);
+
+            JSONArray inputArray = new JSONArray();
+            JSONObject message = new JSONObject();
+            message.put("role", "user");
+
+            JSONArray contentArray = new JSONArray();
+
+            JSONObject inputText = new JSONObject();
+            inputText.put("type", "input_text");
+            inputText.put("text", input);
+
+            if (referenceImageBase64 != null && !referenceImageBase64.trim().isEmpty()) {
+                JSONObject inputImage = new JSONObject();
+                inputImage.put("type", "input_image");
+                // Default to jpeg data-url; the API accepts data URLs.
+                inputImage.put("image_url", "data:image/jpeg;base64," + referenceImageBase64.trim());
+                contentArray.put(inputImage);
+                // Append "Use reference image" to prompt for clarity.
+                inputText.put(
+                        "text",
+                        input + " Consider the reference image when generating the description. " +
+                                "Use it for style and character consistency, but still follow the written prompt.");
+            }
+            contentArray.put(inputText);
+
+            message.put("content", contentArray);
+            inputArray.put(message);
+            payload.put("input", inputArray);
+
             if (previousResponseId != null && !previousResponseId.trim().isEmpty()) {
                 payload.put("previous_response_id", previousResponseId);
             }
@@ -258,7 +287,7 @@ public final class OpenAiClient {
             if (!"image_generation_call".equals(item.optString("type"))) continue;
 
             String result = item.optString("result", "");
-            if (result != null && !result.trim().isEmpty()) {
+            if (!result.trim().isEmpty()) {
                 return result.trim();
             }
         }
@@ -281,6 +310,6 @@ public final class OpenAiClient {
         for (ChatMessage m : messages) {
             transcript.append(m.role).append(": ").append(m.content).append("\n");
         }
-        return createResponse(model, temperature, transcript.toString(), null).outputText;
+        return createResponse(model, temperature, transcript.toString(), null, null).outputText;
     }
 }

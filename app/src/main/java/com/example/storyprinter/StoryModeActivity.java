@@ -533,10 +533,14 @@ public class StoryModeActivity extends AppCompatActivity {
                     input = "Generate the image description for Page " + pageNumberToRender + ".";
                 }
 
+                // If we're applying a user-provided prompt (seed/update), attach the optional reference image.
+                String referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
+
                 OpenAiClient.ResponseResult result = openAi.createResponse(
                         MODEL,
                         TEMPERATURE,
                         input,
+                        referenceBase64,
                         previousTextResponseId
                 );
 
@@ -561,7 +565,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 // Image generation:
                 // - chain only to previous IMAGE response id
                 // - include user-provided reference image ONLY when the user provided a prompt (seed/update)
-                String referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
+                referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
 
                 OpenAiClient.ImageResult imageResult = openAiImages.generateImage(
                         IMAGE_MODEL,
