@@ -85,11 +85,6 @@ public final class OpenAiClient {
                 // Default to jpeg data-url; the API accepts data URLs.
                 inputImage.put("image_url", "data:image/jpeg;base64," + referenceImageBase64.trim());
                 contentArray.put(inputImage);
-                // Append "Use reference image" to prompt for clarity.
-                inputText.put(
-                        "text",
-                        input + " Consider the reference image when generating the description. " +
-                                "Use it for style and character consistency, but still follow the written prompt.");
             }
             contentArray.put(inputText);
 
@@ -171,9 +166,6 @@ public final class OpenAiClient {
                 // Default to jpeg data-url; the API accepts data URLs.
                 inputImage.put("image_url", "data:image/jpeg;base64," + referenceImageBase64.trim());
                 contentArray.put(inputImage);
-                // Append "Use reference image" to prompt for clarity.
-                inputText.put("text", prompt + " Generate the main subjects using the reference image as a style guide.");
-                Log.i("OpenAiClient", inputText.getString("text"));
             }
             contentArray.put(inputText);
 

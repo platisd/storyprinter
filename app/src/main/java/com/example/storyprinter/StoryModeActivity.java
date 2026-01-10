@@ -520,17 +520,27 @@ public class StoryModeActivity extends AppCompatActivity {
                     // First page uses the seed.
                     input = "You create page-by-page prompts for a children's picture book. " +
                             "Return ONLY a simple, vivid image description for one page (no title, no extra commentary). " +
-                            "Keep it child-friendly, concrete, and easy to illustrate. 1 short paragraph max.\n\n" +
+                            "Keep it child-friendly, concrete, and easy to illustrate. 1 short paragraph max.\n" +
                             "Story seed: " + (seedPrompt != null ? seedPrompt : "") + "\n" +
+                            "If available, consider the reference image when generating the description.\n\n" +
+                            "If available, use the reference image for style and character consistency, but still follow the written prompt.\n\n" +
+                            "If there are any style or character details in the story seed, apply them consistently throughout the story.\n" +
+                            "Style or character details in the seed should take precedence over any reference image if they conflict.\n\n" +
                             "Generate the image description for Page 1.";
                 } else if (steerInstructionOrNull != null && !steerInstructionOrNull.trim().isEmpty()) {
                     // Mid-story steering: include the new instruction as the next user input.
                     input = "For Page " + pageNumberToRender + ", continue the story.\n" +
                             "New instruction (apply from this page onward while keeping earlier details consistent): " +
                             steerInstructionOrNull.trim() + "\n\n" +
+                            "If available, use the reference image for style and character consistency, but still follow the written prompt.\n\n" +
+                            "If there are any style or character details in the new instruction, apply them consistently from this page onward.\n" +
+                            "Style or character details in the new instruction should take precedence over any reference image if they conflict.\n\n" +
+                            "Style or character details from earlier pages and instructions should be kept consistent unless overridden by this new instruction.\n\n" +
                             "Return ONLY the image description for this page.";
                 } else {
-                    input = "Generate the image description for Page " + pageNumberToRender + ".";
+                    input = "Generate the image description for Page " + pageNumberToRender + ".\n" +
+                            "Continue the story consistently from earlier pages.\n" +
+                            "Keep style and characters consistent with earlier pages.";
                 }
 
                 // If we're applying a user-provided prompt (seed/update), attach the optional reference image.
