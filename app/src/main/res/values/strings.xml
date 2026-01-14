@@ -24,4 +24,17 @@
     <string name="story_action_clear">Clear</string>
     <string name="story_action_save_image">Save image</string>
     <string name="story_action_print">Print</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Configure your OpenAI key. If you don’t set one here, the app may use a developer key bundled in the build (if present).</string>
+    <string name="settings_api_key_label">OpenAI API key</string>
+    <string name="settings_api_key_hint">Paste your API key</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_clear">Clear</string>
+    <string name="settings_footer_note">Your key is stored only on this device. Don’t share it or commit it to version control.</string>
+    <string name="settings_error_key_required">Please enter an API key</string>
+    <string name="settings_key_saved">API key saved</string>
+    <string name="settings_key_cleared">API key cleared</string>
+    <string name="settings_warning_no_key">No API key found. Add one here or configure it in local.properties for development.</string>
 </resources>

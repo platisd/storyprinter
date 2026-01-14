@@ -41,6 +41,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.widget.NestedScrollView;
 
 import com.example.storyprinter.openai.OpenAiClient;
+import com.example.storyprinter.openai.OpenAiKeyStore;
 import com.example.storyprinter.story.StorySession;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton;
@@ -59,9 +60,6 @@ import java.util.concurrent.Executors;
 import okhttp3.OkHttpClient;
 
 public class StoryModeActivity extends AppCompatActivity {
-
-    // Loaded from BuildConfig.OPENAI_API_KEY (configured via local.properties, not version-controlled).
-    private static final String OPENAI_API_KEY = com.example.storyprinter.BuildConfig.OPENAI_API_KEY;
 
     private static final String MODEL = "gpt-4.1-mini";
     private static final double TEMPERATURE = 1.1; // relatively high for imagination
@@ -146,6 +144,7 @@ public class StoryModeActivity extends AppCompatActivity {
         // Material 3 top app bar.
         com.google.android.material.appbar.MaterialToolbar toolbar = findViewById(R.id.toolbarStory);
         if (toolbar != null) {
+            // Keep it simple: use the default Material toolbar back arrow.
             toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material);
             toolbar.setNavigationOnClickListener(v -> finish());
         }
@@ -229,7 +228,6 @@ public class StoryModeActivity extends AppCompatActivity {
 
         // Text calls: default timeouts.
         OkHttpClient textHttp = new OkHttpClient();
-
         // Image calls can take longer: bump call/read/write timeouts.
         OkHttpClient imageHttp = new OkHttpClient.Builder()
                 .callTimeout(java.time.Duration.ofSeconds(120))
@@ -238,8 +236,17 @@ public class StoryModeActivity extends AppCompatActivity {
                 .writeTimeout(java.time.Duration.ofSeconds(120))
                 .build();
 
-        openAi = new OpenAiClient(textHttp, OPENAI_API_KEY);
-        openAiImages = new OpenAiClient(imageHttp, OPENAI_API_KEY);
+        String apiKey = OpenAiKeyStore.getEffectiveApiKey(this);
+        openAi = new OpenAiClient(textHttp, apiKey);
+        openAiImages = new OpenAiClient(imageHttp, apiKey);
+
+        // If the key is missing, prevent actions that will fail anyway.
+        if (apiKey.trim().isEmpty()) {
+            if (tilSeed != null) {
+                tilSeed.setError("OpenAI API key missing. Set it in Settings.");
+            }
+            if (btnNext != null) btnNext.setEnabled(false);
+        }
 
         // Send/Update (end icon) inside the text box.
         if (tilSeed != null) {

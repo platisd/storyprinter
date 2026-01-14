@@ -42,6 +42,7 @@
                 android:resource="@xml/file_provider_paths" />
         </provider>
 
+        <activity android:name=".SettingsActivity" android:exported="false" />
         <activity android:name=".StoryModeActivity" android:exported="false" />
         <activity android:name=".ManualModeActivity" android:exported="false" />
         <activity

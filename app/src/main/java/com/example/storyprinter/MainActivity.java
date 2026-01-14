@@ -27,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
 
         Intent storyIntent = new Intent(this, StoryModeActivity.class);
         Intent manualIntent = new Intent(this, ManualModeActivity.class);
+        Intent settingsIntent = new Intent(this, SettingsActivity.class);
 
         // Backwards compatible: keep the existing IDs working.
         Button btnStory = findViewById(R.id.btnStoryMode);
@@ -40,5 +41,8 @@ public class MainActivity extends AppCompatActivity {
 
         View cardManual = findViewById(R.id.cardManual);
         if (cardManual != null) cardManual.setOnClickListener(v -> startActivity(manualIntent));
+
+        View cardSettings = findViewById(R.id.cardSettings);
+        if (cardSettings != null) cardSettings.setOnClickListener(v -> startActivity(settingsIntent));
     }
 }
