@@ -106,8 +106,11 @@ public final class OpenAiClient {
                 .post(RequestBody.create(payload.toString(), JSON))
                 .build();
 
+        long startMs = System.currentTimeMillis();
         try (Response resp = http.newCall(req).execute()) {
+            long elapsedMs = System.currentTimeMillis() - startMs;
             String body = resp.body() != null ? resp.body().string() : "";
+            Log.i("OpenAiClient", "createResponse [" + model + "] completed in " + elapsedMs + " ms (HTTP " + resp.code() + ", body " + body.length() + " chars)");
             if (!resp.isSuccessful()) {
                 throw new IOException("OpenAI error: HTTP " + resp.code() + "\n" + body);
             }
@@ -205,10 +208,13 @@ public final class OpenAiClient {
                 "  -H \"Authorization: Bearer " + apiKey + "\" \\\n" +
                 "  -H \"Content-Type: application/json\" \\\n" +
                 "  -d '" + payload.toString().replace("'", "\\'") + "'";
-        Log.i("OpenAiClient", "Curl command:\n" + curlCommand);
+        Log.d("OpenAiClient", "Curl command:\n" + curlCommand);
 
+        long startMs = System.currentTimeMillis();
         try (Response resp = http.newCall(req).execute()) {
+            long elapsedMs = System.currentTimeMillis() - startMs;
             String body = resp.body() != null ? resp.body().string() : "";
+            Log.i("OpenAiClient", "generateImage [" + model + "] completed in " + elapsedMs + " ms (HTTP " + resp.code() + ", body " + body.length() + " chars)");
             if (!resp.isSuccessful()) {
                 throw new IOException("OpenAI error: HTTP " + resp.code() + "\n" + body);
             }

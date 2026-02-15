@@ -63,7 +63,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
     private static final String MODEL = "gpt-4.1-mini";
     private static final double TEMPERATURE = 1.1; // relatively high for imagination
-    private static final String IMAGE_MODEL = "gpt-5";
+    private static final String IMAGE_MODEL = "gpt-4.1-mini";
 
     private volatile boolean isLoading = false;
 
