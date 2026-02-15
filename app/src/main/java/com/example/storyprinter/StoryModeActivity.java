@@ -546,8 +546,10 @@ public class StoryModeActivity extends AppCompatActivity {
                             "Return ONLY the image description for this page.";
                 } else {
                     input = "Generate the image description for Page " + pageNumberToRender + ".\n" +
-                            "Continue the story consistently from earlier pages.\n" +
-                            "Keep style and characters consistent with earlier pages.";
+                            "Advance the story meaningfully: introduce a new scene, action, or setting. " +
+                            "Each page should feel like a distinct moment — avoid repeating the same composition or pose.\n" +
+                            "Keep characters and art style consistent with earlier pages, " +
+                            "but change the environment, activity, or mood.";
                 }
 
                 // If we're applying a user-provided prompt (seed/update), attach the optional reference image.
