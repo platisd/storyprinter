@@ -2,6 +2,9 @@ package com.example.storyprinter;
 
 import android.os.Bundle;
 import android.text.InputType;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
+import android.widget.ImageButton;
 
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.Nullable;
@@ -10,9 +13,11 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.example.storyprinter.openai.ModelPreferences;
 import com.example.storyprinter.openai.OpenAiKeyStore;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -75,6 +80,74 @@ public class SettingsActivity extends AppCompatActivity {
         // Small hint if neither a stored key nor BuildConfig fallback exists.
         if (OpenAiKeyStore.getEffectiveApiKey(this).isEmpty()) {
             Snackbar.make(findViewById(R.id.main_settings), R.string.settings_warning_no_key, Snackbar.LENGTH_LONG).show();
+        }
+
+        setupModelDropdowns();
+    }
+
+    private void setupModelDropdowns() {
+        String[] textModels = {"gpt-4.1-nano", "gpt-4.1-mini", "gpt-5-nano", "gpt-5-mini"};
+        String[] imageRenderModels = {"gpt-image-1-mini", "gpt-image-1", "gpt-image-1.5"};
+
+        // Text model dropdown
+        AutoCompleteTextView actvText = findViewById(R.id.actvTextModel);
+        if (actvText != null) {
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_dropdown_item_1line, textModels);
+            actvText.setAdapter(adapter);
+            actvText.setText(ModelPreferences.getTextModel(this), false);
+            actvText.setOnItemClickListener((parent, view, position, id) ->
+                    ModelPreferences.setTextModel(this, textModels[position]));
+        }
+
+        // Image orchestration model dropdown
+        AutoCompleteTextView actvOrch = findViewById(R.id.actvImageOrchModel);
+        if (actvOrch != null) {
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_dropdown_item_1line, textModels);
+            actvOrch.setAdapter(adapter);
+            actvOrch.setText(ModelPreferences.getImageOrchestrationModel(this), false);
+            actvOrch.setOnItemClickListener((parent, view, position, id) ->
+                    ModelPreferences.setImageOrchestrationModel(this, textModels[position]));
+        }
+
+        // Image rendering model dropdown
+        AutoCompleteTextView actvRender = findViewById(R.id.actvImageRenderModel);
+        if (actvRender != null) {
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_dropdown_item_1line, imageRenderModels);
+            actvRender.setAdapter(adapter);
+            actvRender.setText(ModelPreferences.getImageToolModel(this), false);
+            actvRender.setOnItemClickListener((parent, view, position, id) ->
+                    ModelPreferences.setImageToolModel(this, imageRenderModels[position]));
+        }
+
+        // Info buttons
+        ImageButton btnInfoText = findViewById(R.id.btnInfoTextModel);
+        if (btnInfoText != null) {
+            btnInfoText.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.settings_info_text_model_title)
+                    .setMessage(R.string.settings_info_text_model_message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show());
+        }
+
+        ImageButton btnInfoOrch = findViewById(R.id.btnInfoImageOrchModel);
+        if (btnInfoOrch != null) {
+            btnInfoOrch.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.settings_info_image_orchestration_title)
+                    .setMessage(R.string.settings_info_image_orchestration_message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show());
+        }
+
+        ImageButton btnInfoRender = findViewById(R.id.btnInfoImageRenderModel);
+        if (btnInfoRender != null) {
+            btnInfoRender.setOnClickListener(v -> new MaterialAlertDialogBuilder(this)
+                    .setTitle(R.string.settings_info_image_rendering_title)
+                    .setMessage(R.string.settings_info_image_rendering_message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show());
         }
     }
 }

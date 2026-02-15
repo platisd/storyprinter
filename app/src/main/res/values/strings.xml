@@ -37,4 +37,17 @@
     <string name="settings_key_saved">API key saved</string>
     <string name="settings_key_cleared">API key cleared</string>
     <string name="settings_warning_no_key">No API key found. Add one here or configure it in local.properties for development.</string>
+
+    <!-- Model settings -->
+    <string name="settings_models_title">AI Models</string>
+    <string name="settings_models_subtitle">Choose which models to use for story generation. Reasoning models (e.g. GPT-5) models might produce more accurate results, but are slower and cost more.</string>
+    <string name="settings_text_model_label">Story text model</string>
+    <string name="settings_image_orchestration_model_label">Image orchestration model</string>
+    <string name="settings_image_rendering_model_label">Image rendering model</string>
+    <string name="settings_info_text_model_title">Story text model</string>
+    <string name="settings_info_text_model_message">The AI model used to write the story text for each page. GPT-5 models might produce more accurate but less creative stories.</string>
+    <string name="settings_info_image_orchestration_title">Image orchestration model</string>
+    <string name="settings_info_image_orchestration_message">The AI model that interprets image descriptions and directs the image renderer. GPT-5 models are slower but might be more reliable.</string>
+    <string name="settings_info_image_rendering_title">Image rendering model</string>
+    <string name="settings_info_image_rendering_message">The model that actually draws the images. The larger models produce higher-quality illustrations but are slower and cost more.</string>
 </resources>

@@ -40,6 +40,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.widget.NestedScrollView;
 
+import com.example.storyprinter.openai.ModelPreferences;
 import com.example.storyprinter.openai.OpenAiClient;
 import com.example.storyprinter.openai.OpenAiKeyStore;
 import com.example.storyprinter.story.StorySession;
@@ -61,9 +62,11 @@ import okhttp3.OkHttpClient;
 
 public class StoryModeActivity extends AppCompatActivity {
 
-    private static final String MODEL = "gpt-4.1-mini";
     private static final double TEMPERATURE = 1.1; // relatively high for imagination
-    private static final String IMAGE_MODEL = "gpt-4.1-mini";
+
+    private String textModel;
+    private String imageModel;
+    private String imageToolModel;
 
     private volatile boolean isLoading = false;
 
@@ -239,6 +242,10 @@ public class StoryModeActivity extends AppCompatActivity {
         String apiKey = OpenAiKeyStore.getEffectiveApiKey(this);
         openAi = new OpenAiClient(textHttp, apiKey);
         openAiImages = new OpenAiClient(imageHttp, apiKey);
+
+        textModel = ModelPreferences.getTextModel(this);
+        imageModel = ModelPreferences.getImageOrchestrationModel(this);
+        imageToolModel = ModelPreferences.getImageToolModel(this);
 
         // If the key is missing, prevent actions that will fail anyway.
         if (apiKey.trim().isEmpty()) {
@@ -556,7 +563,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 String referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
 
                 OpenAiClient.ResponseResult result = openAi.createResponse(
-                        MODEL,
+                        textModel,
                         TEMPERATURE,
                         input,
                         referenceBase64,
@@ -587,7 +594,8 @@ public class StoryModeActivity extends AppCompatActivity {
                 referenceBase64 = isSeedOrUpdate ? session.getReferenceImageBase64() : null;
 
                 OpenAiClient.ImageResult imageResult = openAiImages.generateImage(
-                        IMAGE_MODEL,
+                        imageModel,
+                        imageToolModel,
                         assistant,
                         referenceBase64,
                         session.getPreviousImageResponseId()

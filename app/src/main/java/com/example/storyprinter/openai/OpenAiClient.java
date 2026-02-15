@@ -145,6 +145,7 @@ public final class OpenAiClient {
      */
     public ImageResult generateImage(
             String model,
+            String imageToolModel,
             String prompt,
             String referenceImageBase64,
             String previousResponseId
@@ -180,7 +181,7 @@ public final class OpenAiClient {
             JSONArray tools = new JSONArray();
             JSONObject tool = new JSONObject();
             tool.put("type", "image_generation");
-            tool.put("model", "gpt-image-1-mini");
+            tool.put("model", imageToolModel);
             tool.put("size", "1024x1536");
             tool.put("quality", "low");
             tool.put("output_format", "jpeg");
