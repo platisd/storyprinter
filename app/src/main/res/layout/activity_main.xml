@@ -275,23 +275,27 @@
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
 
-                    <!-- Invert -->
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchInvert"
-                        android:layout_width="wrap_content"
+                    <com.google.android.material.chip.ChipGroup
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Invert"
-                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+                        android:layout_marginTop="12dp">
 
-                    <!-- Sharpen -->
-                    <com.google.android.material.materialswitch.MaterialSwitch
-                        android:id="@+id/switchSharpen"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:text="Sharpen"
-                        android:textAppearance="?attr/textAppearanceBodyMedium" />
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/switchInvert"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Invert"
+                            android:checkable="true" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/switchSharpen"
+                            style="@style/Widget.Material3.Chip.Filter"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Sharpen"
+                            android:checkable="true" />
+                    </com.google.android.material.chip.ChipGroup>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnReset"

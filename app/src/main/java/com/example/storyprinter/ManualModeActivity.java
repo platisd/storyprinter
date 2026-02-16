@@ -91,8 +91,8 @@ public class ManualModeActivity extends AppCompatActivity {
     // UI control fields (adjust) - remove btnReprocess, add spinnerDitherMode
     private SeekBar seekGamma, seekThreshold;
     private TextView valueGamma, valueThreshold;
-    private com.google.android.material.materialswitch.MaterialSwitch switchInvert; // M3 switch
-    private com.google.android.material.materialswitch.MaterialSwitch switchSharpen;
+    private com.google.android.material.chip.Chip switchInvert;
+    private com.google.android.material.chip.Chip switchSharpen;
     private Button btnReset;
     private com.google.android.material.textfield.MaterialAutoCompleteTextView spinnerDitherMode;
 
