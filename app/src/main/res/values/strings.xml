@@ -20,8 +20,6 @@
 
     <string name="story_page_title">Page %1$d</string>
 
-    <string name="story_action_next">Next</string>
-    <string name="story_action_clear">Clear</string>
     <string name="story_action_save_image">Save image</string>
     <string name="story_action_print">Print</string>
 

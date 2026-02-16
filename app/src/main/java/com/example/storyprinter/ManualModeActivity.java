@@ -754,14 +754,14 @@ public class ManualModeActivity extends AppCompatActivity {
                     boolean isBlack = (newPixel == 0);
                     if (currentInvert) isBlack = !isBlack;
                     bw.setPixel(x, y, isBlack ? Color.BLACK : Color.WHITE);
-                    if (x + 1 < width)                lum[y][x + 1]     += err;
-                    if (x + 2 < width)                lum[y][x + 2]     += err;
+                    if (x + 1 < width) lum[y][x + 1] += err;
+                    if (x + 2 < width) lum[y][x + 2] += err;
                     if (y + 1 < height) {
-                        if (x > 0)                    lum[y + 1][x - 1] += err;
-                                                      lum[y + 1][x]     += err;
-                        if (x + 1 < width)            lum[y + 1][x + 1] += err;
+                        if (x > 0) { lum[y + 1][x - 1] += err; }
+                        lum[y + 1][x] += err;
+                        if (x + 1 < width) { lum[y + 1][x + 1] += err; }
                     }
-                    if (y + 2 < height)               lum[y + 2][x]     += err;
+                    if (y + 2 < height) { lum[y + 2][x] += err; }
                 }
             }
         } else { // DITHER_NONE

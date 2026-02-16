@@ -29,6 +29,8 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.content.res.AppCompatResources;
+
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -1272,7 +1274,7 @@ public class StoryModeActivity extends AppCompatActivity {
 
         // Extra clean: only show an icon when the action is armed.
         if (armed) {
-            chipSwipeNext.setChipIcon(getDrawable(R.drawable.ic_auto_awesome_24));
+            chipSwipeNext.setChipIcon(AppCompatResources.getDrawable(this, R.drawable.ic_auto_awesome_24));
             chipSwipeNext.setChipIconVisible(true);
         } else {
             chipSwipeNext.setChipIcon(null);
