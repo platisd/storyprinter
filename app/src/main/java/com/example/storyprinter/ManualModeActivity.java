@@ -77,19 +77,22 @@ public class ManualModeActivity extends AppCompatActivity {
 
     // Simplified adjustable parameters
     // Remove boolean currentUseFSDither; introduce enum-like int for dither mode
-    private static final int DITHER_FLOYD_STEINBERG = 0;
-    private static final int DITHER_ORDERED_8x8 = 1;
-    private static final int DITHER_NONE = 2;
-    private int currentDitherMode = DITHER_FLOYD_STEINBERG;
+    private static final int DITHER_ATKINSON = 0;
+    private static final int DITHER_FLOYD_STEINBERG = 1;
+    private static final int DITHER_ORDERED_8x8 = 2;
+    private static final int DITHER_NONE = 3;
+    private int currentDitherMode = DITHER_ATKINSON;
     // Keep existing fields
     private float currentGamma = 1.0f;
     private int currentThreshold = 128;
     private boolean currentInvert = false;
+    private boolean currentSharpen = false;
 
     // UI control fields (adjust) - remove btnReprocess, add spinnerDitherMode
     private SeekBar seekGamma, seekThreshold;
     private TextView valueGamma, valueThreshold;
     private com.google.android.material.materialswitch.MaterialSwitch switchInvert; // M3 switch
+    private com.google.android.material.materialswitch.MaterialSwitch switchSharpen;
     private Button btnReset;
     private com.google.android.material.textfield.MaterialAutoCompleteTextView spinnerDitherMode;
 
@@ -103,6 +106,7 @@ public class ManualModeActivity extends AppCompatActivity {
     private static final String KEY_THRESHOLD = "threshold"; // 0..255
     private static final String KEY_DITHER_MODE = "dither_mode"; // 0 FS,1 ORD,2 NONE
     private static final String KEY_INVERT = "invert";
+    private static final String KEY_SHARPEN = "sharpen";
     private static final String KEY_FSDITHER_LEGACY = "fs_dither"; // legacy boolean for migration
     private static final String KEY_LAST_DEVICE_ADDRESS = "last_device_address"; // MAC of last connected printer
 
@@ -264,6 +268,7 @@ public class ManualModeActivity extends AppCompatActivity {
         valueGamma = findViewById(R.id.valueGamma);
         valueThreshold = findViewById(R.id.valueThreshold);
         switchInvert = findViewById(R.id.switchInvert);
+        switchSharpen = findViewById(R.id.switchSharpen);
         btnReset = findViewById(R.id.btnReset);
         spinnerDitherMode = findViewById(R.id.spinnerDitherMode);
 
@@ -275,7 +280,7 @@ public class ManualModeActivity extends AppCompatActivity {
     private void initControls() {
         // Setup dither mode dropdown adapter
         ditherAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1,
-                new String[]{"Floyd-Steinberg", "Ordered 8x8", "None"});
+                new String[]{"Atkinson", "Floyd-Steinberg", "Ordered 8x8", "None"});
         spinnerDitherMode.setAdapter(ditherAdapter);
         spinnerDitherMode.setText(ditherAdapter.getItem(currentDitherMode), false);
         spinnerDitherMode.setOnItemClickListener((parent, view, position, id) -> {
@@ -315,14 +320,21 @@ public class ManualModeActivity extends AppCompatActivity {
             scheduleLiveReprocess();
         });
 
+        switchSharpen.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            currentSharpen = isChecked;
+            savePreferences();
+            scheduleLiveReprocess();
+        });
+
         btnReset.setOnClickListener(v -> {
             seekGamma.setProgress(DEFAULT_GAMMA_PROGRESS);
             seekThreshold.setProgress(DEFAULT_THRESHOLD);
-            currentDitherMode = DITHER_FLOYD_STEINBERG;
+            currentDitherMode = DITHER_ATKINSON;
             if (ditherAdapter != null) {
                 spinnerDitherMode.setText(ditherAdapter.getItem(currentDitherMode), false);
             }
             switchInvert.setChecked(DEFAULT_INVERT);
+            switchSharpen.setChecked(false);
             // internal vars updated by listeners
             updateStatus("Settings reset");
         });
@@ -333,25 +345,28 @@ public class ManualModeActivity extends AppCompatActivity {
         int gammaProgress = sp.getInt(KEY_GAMMA, DEFAULT_GAMMA_PROGRESS);
         int threshold = sp.getInt(KEY_THRESHOLD, DEFAULT_THRESHOLD);
         int ditherMode = sp.contains(KEY_DITHER_MODE)
-                ? sp.getInt(KEY_DITHER_MODE, DITHER_FLOYD_STEINBERG)
-                : (sp.getBoolean(KEY_FSDITHER_LEGACY, true) ? DITHER_FLOYD_STEINBERG : DITHER_NONE);
+                ? sp.getInt(KEY_DITHER_MODE, DITHER_ATKINSON)
+                : (sp.getBoolean(KEY_FSDITHER_LEGACY, true) ? DITHER_ATKINSON : DITHER_NONE);
         boolean inv = sp.getBoolean(KEY_INVERT, DEFAULT_INVERT);
+        boolean sharpen = sp.getBoolean(KEY_SHARPEN, false);
 
         // Clamp values just in case
         if (gammaProgress < 10) gammaProgress = 10; if (gammaProgress > 150) gammaProgress = 150;
         if (threshold < 0) threshold = 0; if (threshold > 255) threshold = 255;
-        if (ditherMode < 0 || ditherMode > 2) ditherMode = DITHER_FLOYD_STEINBERG;
+        if (ditherMode < 0 || ditherMode > 3) ditherMode = DITHER_ATKINSON;
 
         // Update internal variables & labels
         currentGamma = gammaProgress / 100f;
         currentThreshold = threshold;
         currentDitherMode = ditherMode;
         currentInvert = inv;
+        currentSharpen = sharpen;
 
         // Apply to UI controls (they exist after initViews)
         seekGamma.setProgress(gammaProgress);
         seekThreshold.setProgress(threshold);
         switchInvert.setChecked(inv);
+        switchSharpen.setChecked(sharpen);
         valueGamma.setText(String.format(java.util.Locale.US, "%.2f", currentGamma));
         valueThreshold.setText(String.valueOf(currentThreshold));
 
@@ -365,6 +380,7 @@ public class ManualModeActivity extends AppCompatActivity {
             .putInt(KEY_THRESHOLD, currentThreshold)
             .putInt(KEY_DITHER_MODE, currentDitherMode)
             .putBoolean(KEY_INVERT, currentInvert)
+            .putBoolean(KEY_SHARPEN, currentSharpen)
             .apply();
     }
 
@@ -660,6 +676,32 @@ public class ManualModeActivity extends AppCompatActivity {
             }
         }
 
+        // Unsharp mask: sharpen edges so they survive dithering.
+        // Subtracts a 3x3 box blur from the original and adds the difference scaled by strength.
+        if (currentSharpen) {
+            double strength = 0.5;
+            double[][] sharpened = new double[height][width];
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    double sum = 0;
+                    int count = 0;
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            int ny = y + dy, nx = x + dx;
+                            if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                                sum += lum[ny][nx];
+                                count++;
+                            }
+                        }
+                    }
+                    double blur = sum / count;
+                    double detail = lum[y][x] - blur;
+                    sharpened[y][x] = Math.max(0, Math.min(255, lum[y][x] + detail * strength));
+                }
+            }
+            lum = sharpened;
+        }
+
         Bitmap bw = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
         if (currentDitherMode == DITHER_FLOYD_STEINBERG) {
             for (int y = 0; y < height; y++) {
@@ -699,6 +741,27 @@ public class ManualModeActivity extends AppCompatActivity {
                     boolean isBlack = lumAdj < orderedThreshold;
                     if (currentInvert) isBlack = !isBlack;
                     bw.setPixel(x, y, isBlack ? Color.BLACK : Color.WHITE);
+                }
+            }
+        } else if (currentDitherMode == DITHER_ATKINSON) {
+            // Atkinson: diffuses 6/8 of error to 6 neighbors (loses 1/4 of error).
+            // Produces cleaner whites and darker blacks — ideal for thermal printers.
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    double oldPixel = lum[y][x];
+                    double newPixel = oldPixel < currentThreshold ? 0 : 255;
+                    double err = (oldPixel - newPixel) / 8.0;
+                    boolean isBlack = (newPixel == 0);
+                    if (currentInvert) isBlack = !isBlack;
+                    bw.setPixel(x, y, isBlack ? Color.BLACK : Color.WHITE);
+                    if (x + 1 < width)                lum[y][x + 1]     += err;
+                    if (x + 2 < width)                lum[y][x + 2]     += err;
+                    if (y + 1 < height) {
+                        if (x > 0)                    lum[y + 1][x - 1] += err;
+                                                      lum[y + 1][x]     += err;
+                        if (x + 1 < width)            lum[y + 1][x + 1] += err;
+                    }
+                    if (y + 2 < height)               lum[y + 2][x]     += err;
                 }
             }
         } else { // DITHER_NONE
