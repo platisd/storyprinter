@@ -59,6 +59,9 @@ dependencies {
     // Networking for OpenAI calls
     implementation(libs.okhttp)
 
+    // Splash screen
+    implementation(libs.splashscreen)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
