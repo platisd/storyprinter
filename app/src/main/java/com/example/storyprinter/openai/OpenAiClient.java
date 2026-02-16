@@ -209,7 +209,7 @@ public final class OpenAiClient {
                 "  -H \"Authorization: Bearer " + apiKey + "\" \\\n" +
                 "  -H \"Content-Type: application/json\" \\\n" +
                 "  -d '" + payload.toString().replace("'", "\\'") + "'";
-        Log.d("OpenAiClient", "Curl command:\n" + curlCommand);
+        Log.d("OpenAiClient", "Curl command:\n" + curlCommand.replace(apiKey, "REDACTED"));
 
         long startMs = System.currentTimeMillis();
         try (Response resp = http.newCall(req).execute()) {
