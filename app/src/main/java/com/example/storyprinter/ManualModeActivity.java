@@ -103,6 +103,7 @@ public class ManualModeActivity extends AppCompatActivity {
     private static final String KEY_DITHER_MODE = "dither_mode"; // 0 FS,1 ORD,2 NONE
     private static final String KEY_INVERT = "invert";
     private static final String KEY_FSDITHER_LEGACY = "fs_dither"; // legacy boolean for migration
+    private static final String KEY_LAST_DEVICE_ADDRESS = "last_device_address"; // MAC of last connected printer
 
     private static final int DEFAULT_GAMMA_PROGRESS = 100; // => 1.00
     private static final int DEFAULT_THRESHOLD = 128;
@@ -411,8 +412,27 @@ public class ManualModeActivity extends AppCompatActivity {
             devicesAdapter.clear();
             devicesAdapter.addAll(names);
             devicesAdapter.notifyDataSetChanged();
-            // Default to first device.
-            spinnerDevices.setText(devicesAdapter.getItem(0), false);
+
+            // Pre-select the last connected device if available, otherwise default to first.
+            String savedAddress = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getString(KEY_LAST_DEVICE_ADDRESS, null);
+            String labelToSelect = null;
+            if (savedAddress != null) {
+                for (Map.Entry<String, BluetoothDevice> entry : deviceMap.entrySet()) {
+                    if (savedAddress.equals(entry.getValue().getAddress())) {
+                        labelToSelect = entry.getKey();
+                        break;
+                    }
+                }
+            }
+            spinnerDevices.setText(labelToSelect != null ? labelToSelect : devicesAdapter.getItem(0), false);
+
+            // Auto-connect to the saved device.
+            if (labelToSelect != null) {
+                updateStatus("Reconnecting to last printer...");
+                connectToSelectedDevice();
+                return; // skip generic status below
+            }
         }
 
         // Update status
@@ -449,6 +469,11 @@ public class ManualModeActivity extends AppCompatActivity {
                 if (connectionManager.isConnected()) {
                     String dn = safeDeviceName(device);
                     updateStatus("Connected: " + (dn != null ? dn : "device"));
+
+                    // Remember this device for auto-reconnect next time.
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                            .putString(KEY_LAST_DEVICE_ADDRESS, device.getAddress())
+                            .apply();
 
                     // If we already have an image (e.g. coming from Story mode), allow printing right away.
                     // We rely on the already-processed bitmap if available; otherwise kick off processing now.
