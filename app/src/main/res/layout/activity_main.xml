@@ -107,15 +107,30 @@
                         android:text="Image"
                         android:textAppearance="?attr/textAppearanceTitleMedium" />
 
-                    <com.google.android.material.imageview.ShapeableImageView
-                        android:id="@+id/imagePreview"
+                    <FrameLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:adjustViewBounds="true"
-                        android:contentDescription="Selected image preview"
-                        android:scaleType="fitCenter"
-                        app:shapeAppearance="@style/ShapeAppearance.Material3.Corner.Medium" />
+                        android:layout_marginTop="12dp">
+
+                        <com.google.android.material.imageview.ShapeableImageView
+                            android:id="@+id/imagePreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:adjustViewBounds="true"
+                            android:contentDescription="Selected image preview"
+                            android:scaleType="fitCenter"
+                            app:shapeAppearance="@style/ShapeAppearance.Material3.Corner.Medium" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnRotate"
+                            style="@style/Widget.Material3.Button.IconButton.Filled.Tonal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="bottom|end"
+                            android:layout_margin="8dp"
+                            android:contentDescription="Rotate image"
+                            app:icon="@drawable/ic_rotate_right_24" />
+                    </FrameLayout>
 
                     <LinearLayout
                         android:id="@+id/topButtonsRow"

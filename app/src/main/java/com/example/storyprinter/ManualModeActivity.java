@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -51,7 +52,7 @@ public class ManualModeActivity extends AppCompatActivity {
     public static final String EXTRA_IMAGE_URI = "com.example.storyprinter.extra.IMAGE_URI";
 
     private com.google.android.material.textfield.MaterialAutoCompleteTextView spinnerDevices;
-    private Button btnConnect, btnSelectImage, btnPrint;
+    private Button btnConnect, btnSelectImage, btnRotate, btnPrint;
     private ImageView imagePreview;
     private TextView txtStatus;
 
@@ -254,6 +255,7 @@ public class ManualModeActivity extends AppCompatActivity {
         spinnerDevices = findViewById(R.id.spinnerDevices);
         btnConnect = findViewById(R.id.btnConnect);
         btnSelectImage = findViewById(R.id.btnSelectImage);
+        btnRotate = findViewById(R.id.btnRotate);
         btnPrint = findViewById(R.id.btnPrint);
         imagePreview = findViewById(R.id.imagePreview);
         txtStatus = findViewById(R.id.txtStatus);
@@ -562,6 +564,20 @@ public class ManualModeActivity extends AppCompatActivity {
         txtStatus.setText("Status: " + msg);
     }
 
+    private void rotateImage() {
+        if (originalBitmap == null) {
+            Toast.makeText(this, "Select an image first", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Matrix matrix = new Matrix();
+        matrix.postRotate(90);
+        originalBitmap = Bitmap.createBitmap(originalBitmap, 0, 0,
+                originalBitmap.getWidth(), originalBitmap.getHeight(), matrix, true);
+        processedBitmap = null;
+        refreshSendAvailability();
+        processCurrentImageAsync();
+    }
+
     private void sendCurrentImage() {
         if (processedBitmap == null) {
             Toast.makeText(this, "Select an image first", Toast.LENGTH_SHORT).show();
@@ -731,6 +747,7 @@ public class ManualModeActivity extends AppCompatActivity {
 
     private void setupListeners() {
         btnConnect.setOnClickListener(v -> connectToSelectedDevice());
+        btnRotate.setOnClickListener(v -> rotateImage());
         btnSelectImage.setOnClickListener(v -> {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasPermission(Manifest.permission.READ_MEDIA_IMAGES)) {
                 singlePermissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES);
