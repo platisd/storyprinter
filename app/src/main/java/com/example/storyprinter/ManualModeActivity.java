@@ -157,7 +157,7 @@ public class ManualModeActivity extends AppCompatActivity {
         // Material 3 top app bar.
         com.google.android.material.appbar.MaterialToolbar toolbar = findViewById(R.id.toolbarManual);
         if (toolbar != null) {
-            toolbar.setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material);
+            toolbar.setNavigationIcon(R.drawable.ic_arrow_back_24);
             toolbar.setNavigationOnClickListener(v -> finish());
         }
 
