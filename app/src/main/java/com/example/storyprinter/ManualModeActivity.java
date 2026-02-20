@@ -3,7 +3,6 @@ package com.example.storyprinter;
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -13,9 +12,9 @@ import android.graphics.Matrix;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import android.os.Bundle;
 import android.os.Looper;
-import android.provider.OpenableColumns;
 import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -35,7 +34,13 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.material.snackbar.Snackbar;
+
 import com.example.storyprinter.bluetooth.BluetoothConnectionManager;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.IntentFilter;
+
 import com.example.storyprinter.print.ImageRasterizer;
 import com.example.storyprinter.print.PhomemoEscPosEncoder;
 
@@ -124,6 +129,20 @@ public class ManualModeActivity extends AppCompatActivity {
     private static final long SEND_DEBOUNCE_MS = 5_000L;
     private long sendDisabledUntilUptimeMs = 0L;
 
+    // React to Bluetooth being toggled while the app is in the foreground.
+    private final BroadcastReceiver bluetoothStateReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!BluetoothAdapter.ACTION_STATE_CHANGED.equals(intent.getAction())) return;
+            int state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+            if (state == BluetoothAdapter.STATE_ON) {
+                ensurePermissionsThenLoadDevices();
+            } else if (state == BluetoothAdapter.STATE_OFF) {
+                onBluetoothTurnedOff();
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -144,6 +163,9 @@ public class ManualModeActivity extends AppCompatActivity {
 
         connectionManager = new BluetoothConnectionManager(this);
 
+        registerReceiver(bluetoothStateReceiver,
+                new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
+
         initPermissionLaunchers();
         initViews();
 
@@ -158,6 +180,16 @@ public class ManualModeActivity extends AppCompatActivity {
         handleIncomingImageFromIntent(getIntent());
 
         ensurePermissionsThenLoadDevices();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Re-check Bluetooth state when returning from settings or after toggling BT.
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter != null && adapter.isEnabled() && deviceMap.isEmpty()) {
+            ensurePermissionsThenLoadDevices();
+        }
     }
 
     @Override
@@ -391,15 +423,8 @@ public class ManualModeActivity extends AppCompatActivity {
             singlePermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT);
             return;
         }
+        if (!ensureBluetoothEnabled()) return;
         BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
-        if (adapter == null) {
-            updateStatus("Bluetooth not supported");
-            return;
-        }
-        if (!adapter.isEnabled()) {
-            updateStatus("Bluetooth disabled");
-            return;
-        }
         Set<BluetoothDevice> bonded;
         try {
             bonded = adapter.getBondedDevices();
@@ -463,6 +488,7 @@ public class ManualModeActivity extends AppCompatActivity {
     }
 
     private void connectToSelectedDevice() {
+        if (!ensureBluetoothEnabled()) return;
         String sel = spinnerDevices.getText() != null ? spinnerDevices.getText().toString() : null;
         if (sel == null || sel.trim().isEmpty()) {
             Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show();
@@ -505,6 +531,37 @@ public class ManualModeActivity extends AppCompatActivity {
                 refreshSendAvailability();
             });
         }).start();
+    }
+
+    /** Reset UI to the initial "no Bluetooth" state. */
+    private void onBluetoothTurnedOff() {
+        deviceMap.clear();
+        devicesAdapter.clear();
+        devicesAdapter.notifyDataSetChanged();
+        spinnerDevices.setText("", false);
+        btnConnect.setEnabled(false);
+        if (connectionManager != null) connectionManager.closeConnection();
+        refreshSendAvailability();
+        updateStatus("Bluetooth is off");
+    }
+
+    /**
+     * Returns true when Bluetooth is on and ready to use. When it is off, shows
+     * a Snackbar nudging the user to open Bluetooth settings.
+     */
+    private boolean ensureBluetoothEnabled() {
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter != null && adapter.isEnabled()) return true;
+
+        updateStatus("Bluetooth is off");
+        btnConnect.setEnabled(false);
+        Snackbar.make(findViewById(R.id.main),
+                        "Turn on Bluetooth and pair your printer first",
+                        Snackbar.LENGTH_LONG)
+                .setAction("Settings", v ->
+                        startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)))
+                .show();
+        return false;
     }
 
     private String safeDeviceName(BluetoothDevice device) {
@@ -560,19 +617,6 @@ public class ManualModeActivity extends AppCompatActivity {
             Log.e("ManualModeActivity", "Error reading image", e);
             Toast.makeText(this, "Error reading image", Toast.LENGTH_SHORT).show();
         }
-    }
-
-    @SuppressWarnings("unused")
-    private String getDisplayName(Uri uri) {
-        String name = "image";
-        ContentResolver cr = getContentResolver();
-        try (android.database.Cursor cursor = cr.query(uri, null, null, null, null)) {
-            if (cursor != null && cursor.moveToFirst()) {
-                int idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                if (idx >= 0) name = cursor.getString(idx);
-            }
-        } catch (Exception ignored) {}
-        return name;
     }
 
     @SuppressLint("SetTextI18n")
@@ -795,6 +839,7 @@ public class ManualModeActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         cancelScheduledReprocess();
+        unregisterReceiver(bluetoothStateReceiver);
         if (connectionManager != null) connectionManager.closeConnection();
     }
 
