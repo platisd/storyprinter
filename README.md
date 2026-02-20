@@ -1,8 +1,9 @@
 # StoryPrinter
 
+![Build](https://github.com/platisd/storyprinter/workflows/Build/badge.svg)
+
 AI-powered children's picture book creator
 
-![Build](https://github.com/platisd/storyprinter/workflows/Build/badge.svg)
 
 ## What?
 
