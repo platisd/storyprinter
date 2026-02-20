@@ -18,7 +18,7 @@ public final class ModelPreferences {
     private static final String KEY_IMAGE_TOOL_MODEL = "image_tool_model";
 
     public static final String DEFAULT_TEXT_MODEL = "gpt-4.1-mini";
-    public static final String DEFAULT_IMAGE_ORCHESTRATION_MODEL = "gpt-4.1-mini";
+    public static final String DEFAULT_IMAGE_ORCHESTRATION_MODEL = "gpt-5-mini";
     public static final String DEFAULT_IMAGE_TOOL_MODEL = "gpt-image-1-mini";
 
     private ModelPreferences() {
