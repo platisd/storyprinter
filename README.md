@@ -50,6 +50,11 @@ For printing, images go through a local processing pipeline (scaling, gamma corr
 to produce 1-bit bitmaps suitable for thermal paper.
 The processed image is sent over Bluetooth SPP to the printer as ESC/POS raster data.
 
+**Disclaimer**: Please feel free to contribute with improvements.
+Claude and OpenAI wrote most of the code for this. Not super proud of the code quality,
+but I am not an Android app developer and I wanted to get this done in reasonable time. :sweat_smile:
+
+
 ### Dependencies
 
 * [OkHttp](https://square.github.io/okhttp/) for HTTP communication with the OpenAI API
