@@ -556,7 +556,7 @@ public class StoryModeActivity extends AppCompatActivity {
                 } else {
                     input = "Generate the image description for Page " + pageNumberToRender + ".\n" +
                             "Advance the story meaningfully: introduce a new scene, action, or setting. " +
-                            "Each page should feel like a distinct moment — avoid repeating the same composition or pose.\n" +
+                            "Each page should feel like a distinct moment - avoid repeating the same composition or pose.\n" +
                             "Keep characters and art style consistent with earlier pages, " +
                             "but change the environment, activity, or mood.";
                 }

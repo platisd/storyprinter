@@ -43,7 +43,7 @@ public final class ModelPreferences {
     public static String getImageOrchestrationModel(@NonNull Context context) {
         SharedPreferences sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String v = sp.getString(KEY_IMAGE_ORCHESTRATION_MODEL, DEFAULT_IMAGE_ORCHESTRATION_MODEL);
-        return v == null || v.trim().isEmpty() ? DEFAULT_IMAGE_ORCHESTRATION_MODEL : v.trim();
+        return v.trim().isEmpty() ? DEFAULT_IMAGE_ORCHESTRATION_MODEL : v.trim();
     }
 
     public static void setImageOrchestrationModel(@NonNull Context context, @NonNull String model) {
@@ -57,7 +57,7 @@ public final class ModelPreferences {
     public static String getImageToolModel(@NonNull Context context) {
         SharedPreferences sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String v = sp.getString(KEY_IMAGE_TOOL_MODEL, DEFAULT_IMAGE_TOOL_MODEL);
-        return v == null || v.trim().isEmpty() ? DEFAULT_IMAGE_TOOL_MODEL : v.trim();
+        return v.trim().isEmpty() ? DEFAULT_IMAGE_TOOL_MODEL : v.trim();
     }
 
     public static void setImageToolModel(@NonNull Context context, @NonNull String model) {
