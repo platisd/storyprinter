@@ -162,7 +162,7 @@ public final class OpenAiClient {
 
             JSONObject inputText = new JSONObject();
             inputText.put("type", "input_text");
-            inputText.put("text", prompt);
+            inputText.put("text", "Generate an image based on the following description:\n\n" + prompt);
 
             if (referenceImageBase64 != null && !referenceImageBase64.trim().isEmpty()) {
                 JSONObject inputImage = new JSONObject();
