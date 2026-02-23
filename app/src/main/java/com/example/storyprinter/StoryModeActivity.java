@@ -606,6 +606,10 @@ public class StoryModeActivity extends AppCompatActivity {
                             setPageError(pageBlock, "No image returned.");
                         }
                     }
+                    long imgElapsedMs = imageResult.elapsedMs;
+                    Toast.makeText(this,
+                            "Image generated in " + String.format(Locale.ROOT, "%.1f", imgElapsedMs / 1000.0) + "s",
+                            Toast.LENGTH_SHORT).show();
 
                     setComposeLoading(false);
                     updateButtonsForIdleState();

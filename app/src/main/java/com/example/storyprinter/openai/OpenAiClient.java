@@ -45,10 +45,12 @@ public final class OpenAiClient {
     public static final class ImageResult {
         public final String responseId;
         public final String imageBase64;
+        public final long elapsedMs;
 
-        public ImageResult(String responseId, String imageBase64) {
+        public ImageResult(String responseId, String imageBase64, long elapsedMs) {
             this.responseId = responseId;
             this.imageBase64 = imageBase64;
+            this.elapsedMs = elapsedMs;
         }
     }
 
@@ -240,7 +242,7 @@ public final class OpenAiClient {
                     );
                 }
 
-                return new ImageResult(responseId, imageBase64);
+                return new ImageResult(responseId, imageBase64, elapsedMs);
             } catch (JSONException e) {
                 throw new IOException("Failed to parse OpenAI response\n" + body, e);
             }
