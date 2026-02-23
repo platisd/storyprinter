@@ -67,3 +67,7 @@ I am not intending to publish this app on the Play store, you need to build and 
 Please use Google or an LLM to find instructions on how to build and install Android apps if you haven't done it before.
 If there's enough interest, I might publish the APK here on GitHub,
 but I would encourage you to build the app yourself instead of "trusting" a random APK from the internet.
+
+The story and image generation depends a lot on the prompts used to query the OpenAI API.
+If you want to tweak them for better results or to fit your preferences,
+you may edit them in [`app/src/main/res/values/prompts.xml`](app/src/main/res/values/prompts.xml).

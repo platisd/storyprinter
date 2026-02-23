@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Story-generation prompts.
+    These are sent to the AI model when generating each page of the story.
+    Feel free to tweak them to change the style, tone, or behaviour of the story!
+
+    Placeholders:
+      %1$s  = the user's seed prompt (first-page prompt only)
+      %1$d  = the current page number (steer / next-page prompts)
+      %2$s  = the user's steering instruction (steer prompt only)
+
+    Formatting note:
+      \n = actual newline sent to the model.
+      Line breaks in the XML itself are just for readability and become spaces at runtime.
+-->
+<resources>
+
+    <!-- Sent for the very first page of a new story. -->
+    <string name="prompt_first_page">You create page-by-page prompts for a children\'s picture book.
+        Return ONLY a simple, vivid image description for one page
+        (no title, no extra commentary).
+        Keep it child-friendly, concrete, and easy to illustrate.
+        1 short paragraph max.\n
+        Story seed: ```%1$s```\n
+        If available, consider the reference image
+        when generating the description.\n\n
+        If available, use the reference image for style and character consistency,
+        but still follow the written prompt.\n\n
+        If there are any style or character details in the story seed,
+        apply them consistently throughout the story.\n
+        Style or character details in the seed should take precedence
+        over any reference image if they conflict.\n\n
+        Generate the image description for Page 1.</string>
+
+    <!-- Sent when the user provides a new instruction mid-story (steering). -->
+    <string name="prompt_steer_page">For Page %1$d, continue the story.\n
+        New instruction
+        (apply from this page onward while keeping earlier details consistent):
+        ```%2$s```\n\n
+        If available, use the reference image for style and character consistency,
+        but still follow the written prompt.\n\n
+        If there are any style or character details in the new instruction,
+        apply them consistently from this page onward.\n
+        Style or character details in the new instruction should take precedence
+        over any reference image if they conflict.\n\n
+        Style or character details from earlier pages and instructions
+        should be kept consistent
+        unless overridden by this new instruction.\n\n
+        Return ONLY the image description for this page.</string>
+
+    <!-- Sent for subsequent pages when the user just taps "Next" without steering. -->
+    <string name="prompt_next_page">Generate the image description for Page %1$d.\n
+        Advance the story meaningfully:
+        introduce a new scene, action, or setting.
+        Each page should feel like a distinct moment —
+        avoid repeating the same composition or pose.\n
+        Keep characters and art style consistent with earlier pages,
+        but change the environment, activity, or mood.</string>
+
+</resources>
