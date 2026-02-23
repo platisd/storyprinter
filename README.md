@@ -4,6 +4,8 @@
 
 AI-powered children's picture book creator
 
+<img src="media/storyprinter-printer.jpg" width="30%">
+
 
 ## What?
 
@@ -26,7 +28,7 @@ Step by step:
 Currently, only the [Phomemo T02](https://phomemo.com/products/t02-portable-printer) thermal printer is supported.
 Small modifications to the Bluetooth device filtering and ESC/POS encoding may be needed to support other printers.
 
-<img src="screenshots/01-main-screen.png" width="19%"> <img src="screenshots/02-story-mode-page1.png" width="19%"> <img src="screenshots/03-story-mode-page2.png" width="19%"> <img src="screenshots/04-manual-mode-1.png" width="19%"> <img src="screenshots/05-manual-mode-2.png" width="19%">
+<img src="media/01-main-screen.png" width="19%"> <img src="media/02-story-mode-page1.png" width="19%"> <img src="media/03-story-mode-page2.png" width="19%"> <img src="media/04-manual-mode-1.png" width="19%"> <img src="media/05-manual-mode-2.png" width="19%">
 
 ## Why?
 
