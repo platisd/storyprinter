@@ -69,7 +69,10 @@ public final class OpenAiClient {
         JSONObject payload = new JSONObject();
         try {
             payload.put("model", model);
-            payload.put("temperature", temperature);
+            // Temperature only supported for non-reasoning models (gpt-4.x were the last)
+            if (model.startsWith("gpt-4")) {
+                payload.put("temperature", temperature);
+            }
 
             JSONArray inputArray = new JSONArray();
             JSONObject message = new JSONObject();
