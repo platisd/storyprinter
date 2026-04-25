@@ -87,7 +87,7 @@ public class SettingsActivity extends AppCompatActivity {
 
     private void setupModelDropdowns() {
         String[] textModels = {"gpt-4.1-nano", "gpt-4.1-mini", "gpt-5-nano", "gpt-5-mini"};
-        String[] imageRenderModels = {"gpt-image-1-mini", "gpt-image-1", "gpt-image-1.5"};
+        String[] imageRenderModels = {"gpt-image-1-mini", "gpt-image-1", "gpt-image-1.5", "gpt-image-2"};
 
         // Text model dropdown
         AutoCompleteTextView actvText = findViewById(R.id.actvTextModel);
