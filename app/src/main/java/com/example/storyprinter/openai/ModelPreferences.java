@@ -19,7 +19,7 @@ public final class ModelPreferences {
 
     public static final String DEFAULT_TEXT_MODEL = "gpt-4.1-mini";
     public static final String DEFAULT_IMAGE_ORCHESTRATION_MODEL = "gpt-5-mini";
-    public static final String DEFAULT_IMAGE_TOOL_MODEL = "gpt-image-1-mini";
+    public static final String DEFAULT_IMAGE_TOOL_MODEL = "gpt-image-2.5-flare";
 
     private ModelPreferences() {
         // no instances
